@@ -47,14 +47,14 @@ From the repository root, open PowerShell and run:
 
 ```powershell
 cd .\backend
-\.venv\Scripts\Activate.ps1
+.\.venv\Scripts\Activate.ps1
 ```
 
 If the local virtual environment is not present, create one and install requirements:
 
 ```powershell
 python -m venv .venv
-\.venv\Scripts\Activate.ps1
+.\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 ```
 
@@ -124,9 +124,9 @@ The normal Django settings connect the application to MySQL. The automated API s
 
 ```powershell
 cd .\backend
-\.venv\Scripts\python.exe manage.py test accounts services bookings --settings=config.test_settings
-\.venv\Scripts\python.exe manage.py check
-\.venv\Scripts\python.exe manage.py migrate --check
+.\.venv\Scripts\python.exe manage.py test accounts services bookings --settings=config.test_settings
+.\.venv\Scripts\python.exe manage.py check
+.\.venv\Scripts\python.exe manage.py migrate --check
 ```
 
 Build and lint the React application from the frontend directory:
