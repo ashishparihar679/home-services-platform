@@ -43,7 +43,18 @@ export function AuthProvider({ children }) {
     const { data } = await api.post('/token/', credentials)
     sessionStorage.setItem('accessToken', data.access)
     sessionStorage.setItem('refreshToken', data.refresh)
-    return loadProfile()
+    try {
+      const profile = await loadProfile()
+      if (credentials.account_type && profile.role !== credentials.account_type) {
+        throw new Error('The signed-in account does not match the selected account type.')
+      }
+      return profile
+    } catch (error) {
+      sessionStorage.removeItem('accessToken')
+      sessionStorage.removeItem('refreshToken')
+      setUser(null)
+      throw error
+    }
   }, [loadProfile])
 
   const register = useCallback((details) => api.post('/register/', details), [])

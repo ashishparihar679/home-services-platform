@@ -96,9 +96,15 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Set CORS_ALLOWED_ORIGINS to the deployed frontend URL in Render.
 CORS_ALLOWED_ORIGINS = env_list(
     "CORS_ALLOWED_ORIGINS",
-    ("http://localhost:5173", "http://127.0.0.1:5173"),
+    ("http://localhost:5173", "http://127.0.0.1:5173") if DEBUG else (),
 )
 CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS")
+
+if not DEBUG:
+    if not ALLOWED_HOSTS:
+        raise ImproperlyConfigured("Set ALLOWED_HOSTS for the production service.")
+    if not CORS_ALLOWED_ORIGINS:
+        raise ImproperlyConfigured("Set CORS_ALLOWED_ORIGINS for the deployed frontend.")
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -188,8 +194,13 @@ STORAGES = {
 
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+    # Start with a short HSTS lifetime. Increase it only after HTTPS is confirmed.
+    SECURE_HSTS_SECONDS = int(os.environ.get("SECURE_HSTS_SECONDS", "3600"))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+    SECURE_HSTS_PRELOAD = False
 
 
 # Email

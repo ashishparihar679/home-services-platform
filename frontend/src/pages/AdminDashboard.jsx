@@ -19,6 +19,8 @@ function errorText(error) {
 export default function AdminDashboard() {
   const [services, setServices] = useState([])
   const [bookings, setBookings] = useState([])
+  const [workers, setWorkers] = useState([])
+  const [assignmentDrafts, setAssignmentDrafts] = useState({})
   const [form, setForm] = useState(blankService)
   const [editingId, setEditingId] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -28,22 +30,24 @@ export default function AdminDashboard() {
 
   const loadDashboard = useCallback(async () => {
     try {
-      const [serviceResponse, bookingResponse] = await Promise.all([
-        api.get('/services/'), api.get('/admin/bookings/'),
+      const [serviceResponse, bookingResponse, workerResponse] = await Promise.all([
+        api.get('/services/'), api.get('/admin/bookings/'), api.get('/admin/workers/'),
       ])
       setError('')
       setServices(serviceResponse.data)
       setBookings(bookingResponse.data)
+      setWorkers(workerResponse.data)
     } catch (requestError) { setError(errorText(requestError)) } finally { setLoading(false) }
   }, [])
 
   useEffect(() => {
     let active = true
-    Promise.all([api.get('/services/'), api.get('/admin/bookings/')])
-      .then(([serviceResponse, bookingResponse]) => {
+    Promise.all([api.get('/services/'), api.get('/admin/bookings/'), api.get('/admin/workers/')])
+      .then(([serviceResponse, bookingResponse, workerResponse]) => {
         if (!active) return
         setServices(serviceResponse.data)
         setBookings(bookingResponse.data)
+        setWorkers(workerResponse.data)
       })
       .catch((requestError) => { if (active) setError(errorText(requestError)) })
       .finally(() => { if (active) setLoading(false) })
@@ -87,6 +91,15 @@ export default function AdminDashboard() {
     } catch (requestError) { setError(errorText(requestError)) }
   }
 
+  const assignWorker = async (booking, workerId) => {
+    setError(''); setNotice(''); setBusy(true)
+    try {
+      await api.patch(`/admin/bookings/${booking.id}/assignment/`, { worker_id: workerId ? Number(workerId) : null })
+      setNotice(workerId ? 'Worker assigned. They can now accept or reject this job.' : 'Worker assignment removed.')
+      await loadDashboard()
+    } catch (requestError) { setError(errorText(requestError)) } finally { setBusy(false) }
+  }
+
   return (
     <section className="content-section page-section admin-page">
       <div className="eyebrow">BLOOMCARE OPERATIONS</div><div className="section-heading page-title-row"><div><h1 className="page-title">Good morning, admin.</h1><p className="section-intro">A clear view of the care happening around town.</p></div><button className="button button-outline" onClick={() => { setLoading(true); loadDashboard() }}>↻ Refresh</button></div>
@@ -109,7 +122,30 @@ export default function AdminDashboard() {
 
         <section className="admin-panel">
           <div className="admin-panel-heading"><div><div className="eyebrow">THE PEOPLE WE’RE HELPING</div><h2>Booking requests.</h2></div><span className="panel-count">{bookings.length} total</span></div>
-          {bookings.length ? <div className="admin-booking-list">{bookings.map((booking) => <article className="admin-booking-row" key={booking.id}><div className="admin-booking-main"><div className="admin-booking-title"><strong>{booking.service_name}</strong><span className={`status-pill status-${booking.status}`}>{statusLabels[booking.status] || booking.status}</span></div><span>{booking.customer_username} · {booking.customer_id}</span><span>{new Date(`${booking.booking_date}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} at {booking.booking_time.slice(0, 5)} · ₹{Number(booking.price_at_booking).toLocaleString('en-IN')}</span><span>{booking.address}</span>{booking.notes && <span className="admin-booking-notes">Note: {booking.notes}</span>}</div><label className="status-control">Update status<select value={booking.status} onChange={(event) => updateStatus(booking.id, event.target.value)} disabled={!transitions[booking.status]?.length}><option value={booking.status}>{statusLabels[booking.status]}</option>{(transitions[booking.status] || []).map((value) => <option key={value} value={value}>{statusLabels[value]}</option>)}</select></label></article>)}</div> : <div className="empty-state empty-state-compact"><span className="empty-icon">⌂</span><h3>No bookings just yet</h3><p>New requests will appear here as customers book a service.</p></div>}
+          {bookings.length ? <div className="admin-booking-list">{bookings.map((booking) => {
+            const serviceCategory = services.find((service) => service.id === booking.service)?.category
+            const eligible = workers.filter((worker) => worker.verification_status === 'approved'
+              && worker.is_active && worker.is_available && worker.skills.includes(serviceCategory))
+            const currentWorker = workers.find((worker) => worker.id === booking.worker_id)
+            const choices = currentWorker && !eligible.some((worker) => worker.id === currentWorker.id)
+              ? [currentWorker, ...eligible] : eligible
+            const selectedWorker = assignmentDrafts[booking.id] ?? (booking.worker_id ? String(booking.worker_id) : '')
+            return <article className="admin-booking-row admin-booking-row-expanded" key={booking.id}>
+              <div className="admin-booking-main"><div className="admin-booking-title"><strong>{booking.service_name}</strong><span className={`status-pill status-${booking.status}`}>{statusLabels[booking.status] || booking.status}</span></div>
+                <span>{booking.customer_username} · {booking.customer_id}</span>
+                <span>{new Date(`${booking.booking_date}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} at {booking.booking_time.slice(0, 5)} · ₹{Number(booking.price_at_booking).toLocaleString('en-IN')}</span>
+                <span>{booking.address}</span>{booking.notes && <span className="admin-booking-notes">Note: {booking.notes}</span>}
+                <span className="booking-assignment-summary">Assigned to: {booking.worker_username || 'No worker'} · {booking.assignment_status?.replaceAll('_', ' ')}</span>
+              </div>
+              <div className="admin-booking-controls">
+                <label className="status-control">Update status<select value={booking.status} onChange={(event) => updateStatus(booking.id, event.target.value)} disabled={!transitions[booking.status]?.length}><option value={booking.status}>{statusLabels[booking.status]}</option>{(transitions[booking.status] || []).map((value) => <option key={value} value={value}>{statusLabels[value]}</option>)}</select></label>
+                {['pending', 'confirmed'].includes(booking.status) && <div className="status-control assignment-control"><label htmlFor={`worker-assignment-${booking.id}`}>Assign eligible worker</label><select id={`worker-assignment-${booking.id}`} value={selectedWorker} onChange={(event) => setAssignmentDrafts((current) => ({ ...current, [booking.id]: event.target.value }))}><option value="">Choose worker</option>{choices.map((worker) => <option key={worker.id} value={worker.id}>{[worker.first_name, worker.last_name].filter(Boolean).join(' ') || worker.username} · {worker.verification_status}{!worker.is_available ? ' · unavailable' : ''}</option>)}</select>
+                  <button className="button button-primary button-small" type="button" disabled={busy || !selectedWorker || selectedWorker === String(booking.worker_id || '')} onClick={() => assignWorker(booking, selectedWorker)}>Assign worker</button>
+                  {booking.worker_id && <button className="text-button" type="button" disabled={busy} onClick={() => assignWorker(booking, null)}>Unassign</button>}
+                </div>}
+              </div>
+            </article>
+          })}</div> : <div className="empty-state empty-state-compact"><span className="empty-icon">⌂</span><h3>No bookings just yet</h3><p>New requests will appear here as customers book a service.</p></div>}
         </section>
       </>}
     </section>

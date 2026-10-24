@@ -4,6 +4,7 @@ from django.conf import settings
 from django.core.validators import MinValueValidator
 from django.db import models
 
+from accounts.models import WorkerProfile
 from services.models import Service
 
 
@@ -17,6 +18,24 @@ class Booking(models.Model):
 
     customer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='bookings')
     service = models.ForeignKey(Service, on_delete=models.PROTECT, related_name='bookings')
+    worker = models.ForeignKey(
+        WorkerProfile,
+        on_delete=models.SET_NULL,
+        related_name='bookings',
+        null=True,
+        blank=True,
+    )
+    assignment_status = models.CharField(
+        max_length=20,
+        choices=(
+            ('unassigned', 'Unassigned'),
+            ('awaiting_response', 'Awaiting worker response'),
+            ('accepted', 'Accepted'),
+            ('rejected', 'Rejected'),
+        ),
+        default='unassigned',
+        db_index=True,
+    )
     price_at_booking = models.DecimalField(
         max_digits=10,
         decimal_places=2,
