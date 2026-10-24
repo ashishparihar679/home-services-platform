@@ -34,7 +34,16 @@ if not SECRET_KEY:
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DEBUG", "False").strip().lower() in {"1", "true", "yes", "on"}
 
-ALLOWED_HOSTS = []
+def env_list(name, default=()):
+    """Read comma-separated settings without logging their values."""
+    value = os.environ.get(name, "")
+    return [item.strip() for item in value.split(",") if item.strip()] or list(default)
+
+
+ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", ("localhost", "127.0.0.1") if DEBUG else ())
+render_hostname = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+if render_hostname and render_hostname not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(render_hostname)
 
 
 # Application definition
@@ -55,6 +64,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -83,11 +93,12 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# React's local Vite development servers are allowed to call this API.
-CORS_ALLOWED_ORIGINS = [
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-]
+# Set CORS_ALLOWED_ORIGINS to the deployed frontend URL in Render.
+CORS_ALLOWED_ORIGINS = env_list(
+    "CORS_ALLOWED_ORIGINS",
+    ("http://localhost:5173", "http://127.0.0.1:5173"),
+)
+CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS")
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -107,6 +118,13 @@ SIMPLE_JWT = {
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
+database_options = {"charset": "utf8mb4"}
+database_ca = os.environ.get("DB_SSL_CA")
+if database_ca:
+    database_options["ssl"] = {"ca": database_ca}
+elif not DEBUG:
+    raise ImproperlyConfigured("DB_SSL_CA must point to the database provider's CA certificate in production.")
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.mysql",
@@ -115,7 +133,7 @@ DATABASES = {
         "PASSWORD": os.environ.get("DB_PASSWORD", ""),
         "HOST": os.environ.get("DB_HOST", "127.0.0.1"),
         "PORT": os.environ.get("DB_PORT", "3306"),
-        "OPTIONS": {"charset": "utf8mb4"},
+        "OPTIONS": database_options,
     }
 }
 
@@ -162,6 +180,16 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+}
+
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
 
 
 # Email
