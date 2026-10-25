@@ -47,3 +47,13 @@ class WorkerBookingSerializer(BookingSerializer):
             for field in ('customer_id', 'customer_username', 'address', 'notes'):
                 data.pop(field, None)
         return data
+
+
+class WorkerAvailabilityQuerySerializer(serializers.Serializer):
+    date = serializers.DateField()
+    time = serializers.TimeField()
+
+    def validate_date(self, value):
+        if value < timezone.localdate():
+            raise serializers.ValidationError('Availability can only be checked for today or a future date.')
+        return value

@@ -6,6 +6,7 @@ from .views import (
     BookingCreateView,
     BookingStatusUpdateView,
     MyBookingsView,
+    ServiceAvailableWorkersView,
     WorkerJobProgressView,
     WorkerJobResponseView,
     WorkerJobsView,
@@ -13,6 +14,7 @@ from .views import (
 )
 
 urlpatterns = [
+    path('services/<int:service_id>/available-workers/', ServiceAvailableWorkersView.as_view(), name='service-available-workers'),
     path('bookings/', BookingCreateView.as_view(), name='booking-create'),
     path('my-bookings/', MyBookingsView.as_view(), name='my-bookings'),
     path('admin/bookings/', AdminBookingsView.as_view(), name='admin-bookings'),

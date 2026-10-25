@@ -51,6 +51,104 @@ class BookingApiTests(APITestCase):
         self.assertEqual(str(booking.price_at_booking), '450.00')
         self.assertEqual(booking.status, Booking.Status.PENDING)
 
+    def test_customer_can_check_service_workers_without_private_data(self):
+        self.worker_user.first_name = 'Asha'
+        self.worker_user.last_name = 'Kumar'
+        self.worker_user.save(update_fields=('first_name', 'last_name'))
+        self.client.force_authenticate(self.customer)
+
+        response = self.client.get(f"/api/services/{self.service.pk}/available-workers/", {
+            'date': self.payload['booking_date'], 'time': self.payload['booking_time'],
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['service_id'], self.service.pk)
+        self.assertEqual(len(response.data['workers']), 1)
+        worker = response.data['workers'][0]
+        self.assertEqual(worker['id'], self.worker.pk)
+        self.assertEqual(worker['name'], 'Asha Kumar')
+        self.assertEqual(worker['availability_status'], 'available')
+        for private_field in ('phone_number', 'address', 'email', 'username'):
+            self.assertNotIn(private_field, worker)
+
+    def test_worker_availability_uses_approval_skill_availability_and_booking_status(self):
+        self.client.force_authenticate(self.customer)
+        pending_user = User.objects.create_user(username='pending-suggestion', password='Passphrase-54321!')
+        WorkerProfile.objects.create(
+            user=pending_user, skills=['plumber'], city='Bhopal', address='Private road',
+            verification_status=WorkerProfile.VerificationStatus.PENDING,
+        )
+        unavailable_user = User.objects.create_user(username='unavailable-suggestion', password='Passphrase-54321!')
+        unavailable = WorkerProfile.objects.create(
+            user=unavailable_user, skills=['plumber'], city='Bhopal', address='Private road',
+            verification_status=WorkerProfile.VerificationStatus.APPROVED, is_available=False,
+        )
+        inactive_user = User.objects.create_user(
+            username='inactive-suggestion', password='Passphrase-54321!', is_active=False,
+        )
+        inactive = WorkerProfile.objects.create(
+            user=inactive_user, skills=['plumber'], city='Bhopal', address='Private road',
+            verification_status=WorkerProfile.VerificationStatus.APPROVED, is_available=True,
+        )
+        rejected_user = User.objects.create_user(username='rejected-suggestion', password='Passphrase-54321!')
+        WorkerProfile.objects.create(
+            user=rejected_user, skills=['plumber'], city='Bhopal', address='Private road',
+            verification_status=WorkerProfile.VerificationStatus.REJECTED, is_available=True,
+        )
+        wrong_skill_user = User.objects.create_user(username='other-skill-suggestion', password='Passphrase-54321!')
+        WorkerProfile.objects.create(
+            user=wrong_skill_user, skills=['electrician'], city='Bhopal', address='Private road',
+            verification_status=WorkerProfile.VerificationStatus.APPROVED, is_available=True,
+        )
+
+        response = self.client.get(f"/api/services/{self.service.pk}/available-workers/", {
+            'date': self.payload['booking_date'], 'time': self.payload['booking_time'],
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        statuses = {worker['id']: worker['availability_status'] for worker in response.data['workers']}
+        self.assertEqual(statuses, {self.worker.pk: 'available', unavailable.pk: 'unavailable', inactive.pk: 'unavailable'})
+
+        conflicting_booking = Booking.objects.create(
+            customer=self.other_customer, service=self.service, price_at_booking=self.service.price,
+            booking_date=self.payload['booking_date'], booking_time=self.payload['booking_time'], address='Address',
+            worker=self.worker, assignment_status='awaiting_response',
+        )
+        busy_response = self.client.get(f"/api/services/{self.service.pk}/available-workers/", {
+            'date': self.payload['booking_date'], 'time': self.payload['booking_time'],
+        })
+        busy_statuses = {worker['id']: worker['availability_status'] for worker in busy_response.data['workers']}
+        self.assertEqual(busy_statuses[self.worker.pk], 'busy')
+
+        conflicting_booking.assignment_status = 'rejected'
+        conflicting_booking.save(update_fields=('assignment_status',))
+        rejected_assignment_response = self.client.get(f"/api/services/{self.service.pk}/available-workers/", {
+            'date': self.payload['booking_date'], 'time': self.payload['booking_time'],
+        })
+        rejected_statuses = {worker['id']: worker['availability_status'] for worker in rejected_assignment_response.data['workers']}
+        self.assertEqual(rejected_statuses[self.worker.pk], 'available')
+        self.assertNotIn(pending_user.worker_profile.pk, rejected_statuses)
+        self.assertNotIn(rejected_user.worker_profile.pk, rejected_statuses)
+
+    def test_worker_availability_requires_customer_and_valid_date_and_time(self):
+        url = f"/api/services/{self.service.pk}/available-workers/"
+        unauthenticated = self.client.get(url, {'date': self.payload['booking_date'], 'time': '10:30'})
+        self.assertEqual(unauthenticated.status_code, status.HTTP_401_UNAUTHORIZED)
+
+        self.client.force_authenticate(self.customer)
+        missing_time = self.client.get(url, {'date': self.payload['booking_date']})
+        self.assertEqual(missing_time.status_code, status.HTTP_400_BAD_REQUEST)
+
+        wrong_category = Service.objects.create(
+            name='Wiring', category=Service.Category.ELECTRICIAN,
+            description='Electrical work', price='500.00',
+        )
+        no_matching_workers = self.client.get(f"/api/services/{wrong_category.pk}/available-workers/", {
+            'date': self.payload['booking_date'], 'time': '10:30',
+        })
+        self.assertEqual(no_matching_workers.status_code, status.HTTP_200_OK)
+        self.assertEqual(no_matching_workers.data['workers'], [])
+
     def test_customers_only_see_their_own_bookings_and_cannot_update_status(self):
         booking = Booking.objects.create(
             customer=self.other_customer, service=self.service, price_at_booking=self.service.price,
@@ -151,6 +249,33 @@ class BookingApiTests(APITestCase):
         )
         self.assertEqual(pending_response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(skill_response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_worker_cannot_be_assigned_to_overlapping_bookings_but_cancelled_jobs_do_not_block(self):
+        date = timezone.localdate() + timedelta(days=1)
+        first = Booking.objects.create(
+            customer=self.customer, service=self.service, price_at_booking=self.service.price,
+            booking_date=date, booking_time='12:30:00', address='First address', worker=self.worker,
+            assignment_status='accepted', status=Booking.Status.CONFIRMED,
+        )
+        second = Booking.objects.create(
+            customer=self.other_customer, service=self.service, price_at_booking=self.service.price,
+            booking_date=date, booking_time='12:30:00', address='Second address',
+        )
+        self.client.force_authenticate(self.admin)
+
+        overlap = self.client.patch(
+            f'/api/admin/bookings/{second.pk}/assignment/', {'worker_id': self.worker.pk}, format='json'
+        )
+        self.assertEqual(overlap.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIsNone(Booking.objects.get(pk=second.pk).worker)
+
+        first.status = Booking.Status.CANCELLED
+        first.save(update_fields=('status',))
+        after_cancellation = self.client.patch(
+            f'/api/admin/bookings/{second.pk}/assignment/', {'worker_id': self.worker.pk}, format='json'
+        )
+        self.assertEqual(after_cancellation.status_code, status.HTTP_200_OK)
+        self.assertEqual(Booking.objects.get(pk=second.pk).worker, self.worker)
 
     def test_worker_cannot_read_or_update_another_workers_booking(self):
         other_user = User.objects.create_user(username='other-worker', password='Passphrase-54321!')

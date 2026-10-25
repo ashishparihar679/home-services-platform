@@ -5,9 +5,15 @@ import api from '../api/client'
 function errorText(error) {
   const data = error.response?.data
   if (!data) return 'Could not reach the server. Please try again.'
+  if (typeof data === 'string') return data
   if (typeof data.detail === 'string') return data.detail
-  const first = Object.values(data).flat()[0]
-  return typeof first === 'string' ? first : 'Please review the form and try again.'
+  if (typeof data !== 'object') return 'Please review the form and try again.'
+  const messages = Object.values(data).flat(Infinity).filter((value) => typeof value === 'string' && value.trim())
+  return messages[0] || 'Please review the form and try again.'
+}
+
+function workerInitials(name) {
+  return name.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()
 }
 
 const statusLabels = {
@@ -30,7 +36,11 @@ export function BookServicePage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const [availability, setAvailability] = useState({ key: '', status: 'idle', workers: [], error: '' })
   const [form, setForm] = useState({ booking_date: BOOKING_MIN_DATE, booking_time: '', address: '', notes: '' })
+  const availabilityKey = service && form.booking_date && form.booking_time
+    ? `${serviceId}|${form.booking_date}|${form.booking_time}`
+    : ''
 
   useEffect(() => {
     api.get(`/services/${serviceId}/`).then(({ data }) => setService(data))
@@ -38,7 +48,31 @@ export function BookServicePage() {
       .finally(() => setLoading(false))
   }, [serviceId])
 
-  const update = (event) => setForm({ ...form, [event.target.name]: event.target.value })
+  useEffect(() => {
+    if (!availabilityKey) return undefined
+
+    let active = true
+    const [requestedServiceId, date, time] = availabilityKey.split('|')
+    api.get(`/services/${requestedServiceId}/available-workers/`, {
+      params: { date, time },
+    })
+      .then(({ data }) => {
+        if (active) {
+          setAvailability({ key: availabilityKey, status: 'ready', workers: data.workers || [], error: '' })
+        }
+      })
+      .catch((requestError) => {
+        if (active) setAvailability({ key: availabilityKey, status: 'error', workers: [], error: errorText(requestError) })
+      })
+
+    return () => { active = false }
+  }, [availabilityKey])
+
+  const currentAvailability = availability.key === availabilityKey
+    ? availability
+    : { key: availabilityKey, status: availabilityKey ? 'loading' : 'idle', workers: [], error: '' }
+
+  const update = (event) => setForm((current) => ({ ...current, [event.target.name]: event.target.value }))
   const submit = async (event) => {
     event.preventDefault(); setError(''); setBusy(true)
     try {
@@ -60,6 +94,19 @@ export function BookServicePage() {
           {error && <div className="notice notice-error" role="alert">{error}</div>}
           <form className="form-stack booking-form" onSubmit={submit}>
             <div className="form-two"><label>Preferred date<input type="date" name="booking_date" min={BOOKING_MIN_DATE} value={form.booking_date} onChange={update} required /></label><label>Preferred time<input type="time" name="booking_time" value={form.booking_time} onChange={update} required /></label></div>
+            <section className="booking-professionals" aria-labelledby="booking-professionals-heading">
+              <div className="booking-professionals-heading"><div><div className="eyebrow">THE PEOPLE BEHIND THE GOOD WORK</div><h2 id="booking-professionals-heading">Available professionals.</h2><p>Suggestions for your selected service and time. Bloomcare confirms the assignment after you request a booking.</p></div></div>
+              {!availabilityKey && <p className="booking-availability-message">Choose a preferred date and time to check availability.</p>}
+              {currentAvailability.status === 'loading' && <p className="booking-availability-message" role="status">Checking professionals for this date and time…</p>}
+              {currentAvailability.status === 'error' && <div className="notice notice-error" role="alert">{currentAvailability.error}</div>}
+              {currentAvailability.status === 'ready' && !currentAvailability.workers.some((worker) => worker.availability_status === 'available') && <p className="booking-availability-message booking-availability-empty">No workers are available for this service at the selected date and time. Please try another time.</p>}
+              {currentAvailability.status === 'ready' && currentAvailability.workers.length > 0 && <div className="professional-list">{currentAvailability.workers.map((worker) => <article className="professional-card" key={worker.id}>
+                <span className="professional-avatar" aria-hidden="true">{workerInitials(worker.name)}</span>
+                <div className="professional-card-main"><div className="professional-card-heading"><h3>{worker.name}</h3><span className={`professional-availability professional-availability-${worker.availability_status}`}>{worker.availability_status}</span></div>
+                  <p>{worker.skills.map((skill) => skill[0].toUpperCase() + skill.slice(1)).join(' · ')} · {worker.experience_years} years’ experience</p><p>{worker.city}</p>
+                </div>
+              </article>)}</div>}
+            </section>
             <label>Service address<textarea name="address" rows="3" placeholder="House / flat, street, area, city, PIN code" value={form.address} onChange={update} required /></label>
             <label>Anything we should know? <span className="optional-label">Optional</span><textarea name="notes" rows="3" placeholder="Share a detail that will help us prepare" value={form.notes} onChange={update} /></label>
             <button className="button button-dark button-wide" disabled={busy}>{busy ? 'Sending your request…' : 'Request this service'} <span aria-hidden="true">↗</span></button>

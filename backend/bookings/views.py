@@ -9,7 +9,7 @@ from accounts.models import WorkerProfile
 from accounts.permissions import IsApprovedActiveWorker, IsCustomer, IsStaffAdmin, IsSuperuserOnly
 from services.models import Service
 from .models import Booking
-from .serializers import BookingSerializer, WorkerBookingSerializer
+from .serializers import BookingSerializer, WorkerAvailabilityQuerySerializer, WorkerBookingSerializer
 
 
 ALLOWED_STATUS_TRANSITIONS = {
@@ -19,6 +19,80 @@ ALLOWED_STATUS_TRANSITIONS = {
     Booking.Status.COMPLETED: set(),
     Booking.Status.CANCELLED: set(),
 }
+BOOKING_CONFLICT_STATUSES = (
+    Booking.Status.PENDING,
+    Booking.Status.CONFIRMED,
+    Booking.Status.IN_PROGRESS,
+)
+
+
+def worker_has_booking_conflict(worker_id, booking_date, booking_time, exclude_booking_id=None):
+    conflicts = Booking.objects.filter(
+        worker_id=worker_id,
+        booking_date=booking_date,
+        booking_time=booking_time,
+        status__in=BOOKING_CONFLICT_STATUSES,
+    ).exclude(assignment_status='rejected')
+    if exclude_booking_id is not None:
+        conflicts = conflicts.exclude(pk=exclude_booking_id)
+    return conflicts.exists()
+
+
+class ServiceAvailableWorkersView(APIView):
+    permission_classes = (IsCustomer,)
+
+    def get(self, request, service_id):
+        service = Service.objects.filter(pk=service_id, is_active=True).first()
+        if service is None:
+            raise NotFound('Service not found.')
+
+        query = WorkerAvailabilityQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        booking_date = query.validated_data['date']
+        booking_time = query.validated_data['time']
+
+        # Keep pending and rejected applications private. Only approved workers
+        # who list this service category are shown as public suggestions.
+        qualified_workers = [
+            worker for worker in WorkerProfile.objects.select_related('user').filter(
+                verification_status=WorkerProfile.VerificationStatus.APPROVED,
+            ).order_by('pk')
+            if service.category in worker.skills
+        ]
+        worker_ids = [worker.pk for worker in qualified_workers]
+        conflicting_worker_ids = set(Booking.objects.filter(
+            worker_id__in=worker_ids,
+            booking_date=booking_date,
+            booking_time=booking_time,
+            status__in=BOOKING_CONFLICT_STATUSES,
+        ).exclude(assignment_status='rejected').values_list('worker_id', flat=True))
+
+        professionals = []
+        for worker in qualified_workers:
+            eligible = worker.user.is_active and worker.is_active and worker.is_available
+            if not eligible:
+                availability = 'unavailable'
+            elif worker.pk in conflicting_worker_ids:
+                availability = 'busy'
+            else:
+                availability = 'available'
+
+            name = ' '.join(part for part in (worker.user.first_name, worker.user.last_name) if part).strip()
+            professionals.append({
+                'id': worker.pk,
+                'name': name or 'Bloomcare Professional',
+                'skills': worker.skills,
+                'experience_years': worker.experience_years,
+                'city': worker.city,
+                'availability_status': availability,
+            })
+
+        return Response({
+            'service_id': service.pk,
+            'date': booking_date,
+            'time': booking_time,
+            'workers': professionals,
+        })
 
 
 class BookingCreateView(generics.CreateAPIView):
@@ -112,6 +186,10 @@ class BookingAssignmentView(APIView):
                     raise ValidationError({'worker_id': 'Only approved, active, available workers can be assigned.'})
                 if booking.service.category not in worker.skills:
                     raise ValidationError({'worker_id': 'This worker does not list the booking service category as a skill.'})
+                if worker_has_booking_conflict(
+                    worker.pk, booking.booking_date, booking.booking_time, exclude_booking_id=booking.pk,
+                ):
+                    raise ValidationError({'worker_id': 'This worker already has a booking at the selected date and time.'})
                 booking.worker = worker
                 booking.assignment_status = 'awaiting_response'
 
