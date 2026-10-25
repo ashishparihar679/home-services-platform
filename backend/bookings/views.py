@@ -109,7 +109,7 @@ class MyBookingsView(generics.ListAPIView):
     permission_classes = (IsCustomer,)
 
     def get_queryset(self):
-        return Booking.objects.filter(customer=self.request.user).select_related('service', 'customer')
+        return Booking.objects.filter(customer=self.request.user).select_related('service', 'customer', 'worker__user')
 
 
 class AdminBookingsView(generics.ListAPIView):

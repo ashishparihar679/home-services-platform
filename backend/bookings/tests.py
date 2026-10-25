@@ -165,6 +165,26 @@ class BookingApiTests(APITestCase):
         self.assertEqual(len(own_bookings.data), 0)
         self.assertEqual(status_update.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_customer_sees_worker_name_only_after_worker_accepts_assignment(self):
+        self.worker_user.first_name = 'Ravi'
+        self.worker_user.last_name = 'Sharma'
+        self.worker_user.save(update_fields=('first_name', 'last_name'))
+        booking = Booking.objects.create(
+            customer=self.customer, service=self.service, price_at_booking=self.service.price,
+            booking_date=timezone.localdate() + timedelta(days=1), booking_time='11:30:00',
+            address='Customer address', worker=self.worker, assignment_status='awaiting_response',
+        )
+        self.client.force_authenticate(self.customer)
+
+        awaiting = self.client.get('/api/my-bookings/')
+        self.assertEqual(awaiting.data[0]['worker_name'], None)
+
+        booking.assignment_status = 'accepted'
+        booking.status = Booking.Status.CONFIRMED
+        booking.save(update_fields=('assignment_status', 'status'))
+        accepted = self.client.get('/api/my-bookings/')
+        self.assertEqual(accepted.data[0]['worker_name'], 'Ravi Sharma')
+
     def test_admin_status_updates_must_follow_allowed_transitions(self):
         booking = Booking.objects.create(
             customer=self.customer, service=self.service, price_at_booking=self.service.price,

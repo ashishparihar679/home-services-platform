@@ -12,19 +12,26 @@ class BookingSerializer(serializers.ModelSerializer):
     customer_username = serializers.CharField(source='customer.username', read_only=True)
     worker_id = serializers.IntegerField(read_only=True, allow_null=True)
     worker_username = serializers.CharField(source='worker.user.username', read_only=True, allow_null=True)
+    worker_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
         fields = (
             'id', 'service', 'service_name', 'customer_id', 'customer_username', 'worker_id',
-            'worker_username', 'assignment_status',
+            'worker_username', 'worker_name', 'assignment_status',
             'price_at_booking', 'booking_date',
             'booking_time', 'address', 'notes', 'status', 'created_at', 'updated_at',
         )
         read_only_fields = (
-            'id', 'price_at_booking', 'status', 'worker_id', 'worker_username',
+            'id', 'price_at_booking', 'status', 'worker_id', 'worker_username', 'worker_name',
             'assignment_status', 'created_at', 'updated_at',
         )
+
+    def get_worker_name(self, booking):
+        if booking.assignment_status != 'accepted' or booking.worker is None:
+            return None
+        name = ' '.join(part for part in (booking.worker.user.first_name, booking.worker.user.last_name) if part).strip()
+        return name or 'Bloomcare Professional'
 
     def validate_booking_date(self, value):
         if value < timezone.localdate():
