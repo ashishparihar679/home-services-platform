@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/useAuth'
 
 function Arrow() {
@@ -13,9 +13,9 @@ function Chevron() {
 const publicLinks = [
   { to: '/', label: 'Home', end: true },
   { to: '/services', label: 'Services' },
-  { to: '/#how-it-works', label: 'How it works' },
-  { to: '/#about', label: 'About' },
-  { to: '/#contact', label: 'Contact' },
+  { to: '/how-it-works', label: 'How it works' },
+  { to: '/about', label: 'About' },
+  { to: '/contact', label: 'Contact' },
 ]
 
 function accountLinks(user) {
@@ -39,7 +39,6 @@ function accountLinks(user) {
 
 export default function Navbar() {
   const { user, logout } = useAuth()
-  const location = useLocation()
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
@@ -86,9 +85,7 @@ export default function Navbar() {
         </button>
 
         <nav id="primary-navigation" className={`main-nav ${menuOpen ? 'is-open' : ''}`} aria-label="Main navigation">
-          {publicLinks.map(({ to, label, end }) => to.includes('#')
-            ? <Link key={label} to={to} className={location.hash === to.slice(to.indexOf('#')) ? 'active' : undefined} aria-current={location.hash === to.slice(to.indexOf('#')) ? 'page' : undefined} onClick={closeMenus}>{label}</Link>
-            : <NavLink key={label} to={to} end={end} onClick={closeMenus}>{label}</NavLink>)}
+          {publicLinks.map(({ to, label, end }) => <NavLink key={label} to={to} end={end} onClick={closeMenus}>{label}</NavLink>)}
           <div className="mobile-nav-secondary">
             {user ? <>
               {roleLinks.map(({ to, label }) => <NavLink key={label} to={to} onClick={closeMenus}>{label}</NavLink>)}

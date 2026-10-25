@@ -8,6 +8,7 @@ import { CustomerDashboard, ProfilePage, SuperDashboard, WorkerDashboard, Worker
 import WorkerManagement from './pages/WorkerManagement'
 import HomePage from './pages/HomePage'
 import ServicesPage from './pages/ServicesPage'
+import { AboutPage, ContactPage, HowItWorksPage } from './pages/InfoPages'
 import { AuthProvider } from './context/AuthContext'
 import './App.css'
 import './premium.css'
@@ -24,6 +25,9 @@ export default function App() {
           <Route element={<SiteLayout />}>
             <Route index element={<HomePage />} />
             <Route path="services" element={<ServicesPage />} />
+            <Route path="how-it-works" element={<HowItWorksPage />} />
+            <Route path="about" element={<AboutPage />} />
+            <Route path="contact" element={<ContactPage />} />
             <Route path="login" element={<LoginPage />} />
             <Route path="register" element={<RegisterPage />} />
             <Route element={<ProtectedRoute allowedRoles={['customer']} />}>
