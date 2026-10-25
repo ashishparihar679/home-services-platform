@@ -64,7 +64,7 @@ export function CustomerDashboard() {
   }))
 
   const submitApplication = async (event) => {
-    event.preventDefault(); setApplyError(''); setApplyMessage(''); setApplyBusy(true)
+    event.preventDefault(); setApplyError(''); setApplyBusy(true)
     try {
       await api.post('/worker/apply/', { ...application, experience_years: Number(application.experience_years) })
       await loadProfile()
