@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../api/client'
+import { notifyError, notifySuccess } from '../utils/notifications'
 
 const statuses = ['all', 'pending', 'approved', 'rejected', 'suspended']
 
@@ -52,9 +53,9 @@ export default function WorkerManagement() {
       await api.patch(`/admin/workers/${worker.id}/`, updates[action])
       const labels = { approve: 'approved', reject: 'rejected', suspend: 'suspended', reactivate: 'reactivated', deactivate: 'deactivated' }
       const label = labels[action]
-      setNotice(`${worker.first_name || worker.username} was ${label}.`)
+      setNotice(''); notifySuccess(`${worker.first_name || worker.username} was ${label}.`)
       await loadWorkers()
-    } catch (requestError) { setError(errorText(requestError)) } finally { setBusyId(null) }
+    } catch (requestError) { setError(errorText(requestError)); notifyError(errorText(requestError)) } finally { setBusyId(null) }
   }
 
   return <section className="content-section page-section dashboard-page">

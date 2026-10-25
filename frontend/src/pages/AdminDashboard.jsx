@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import api from '../api/client'
+import { notifyError, notifySuccess } from '../utils/notifications'
 
 const blankService = { name: '', category: 'electrician', description: '', price: '', is_active: true }
 const statusLabels = { pending: 'Pending', confirmed: 'Confirmed', in_progress: 'In progress', completed: 'Completed', cancelled: 'Cancelled' }
@@ -67,37 +68,37 @@ export default function AdminDashboard() {
     try {
       if (editingId) await api.patch(`/services/${editingId}/`, form)
       else await api.post('/services/', form)
-      setNotice(editingId ? 'Service details saved.' : 'New service added.')
+      setNotice(''); notifySuccess(editingId ? 'Service details saved.' : 'New service added.')
       resetForm()
       await loadDashboard()
-    } catch (requestError) { setError(errorText(requestError)) } finally { setBusy(false) }
+    } catch (requestError) { setError(errorText(requestError)); notifyError(errorText(requestError)) } finally { setBusy(false) }
   }
 
   const toggleService = async (service) => {
     setError(''); setNotice('')
     try {
       await api.patch(`/services/${service.id}/`, { is_active: !service.is_active })
-      setNotice(`${service.name} ${service.is_active ? 'paused' : 'made available'}.`)
+      setNotice(''); notifySuccess(`${service.name} ${service.is_active ? 'paused' : 'made available'}.`)
       await loadDashboard()
-    } catch (requestError) { setError(errorText(requestError)) }
+    } catch (requestError) { setError(errorText(requestError)); notifyError(errorText(requestError)) }
   }
 
   const updateStatus = async (bookingId, newStatus) => {
     setError(''); setNotice('')
     try {
       await api.patch(`/bookings/${bookingId}/status/`, { status: newStatus })
-      setNotice('Booking status updated.')
+      setNotice(''); notifySuccess('Booking status updated.')
       await loadDashboard()
-    } catch (requestError) { setError(errorText(requestError)) }
+    } catch (requestError) { setError(errorText(requestError)); notifyError(errorText(requestError)) }
   }
 
   const assignWorker = async (booking, workerId) => {
     setError(''); setNotice(''); setBusy(true)
     try {
       await api.patch(`/admin/bookings/${booking.id}/assignment/`, { worker_id: workerId ? Number(workerId) : null })
-      setNotice(workerId ? 'Worker assigned. They can now accept or reject this job.' : 'Worker assignment removed.')
+      setNotice(''); notifySuccess(workerId ? 'Worker assigned. They can now accept or reject this job.' : 'Worker assignment removed.')
       await loadDashboard()
-    } catch (requestError) { setError(errorText(requestError)) } finally { setBusy(false) }
+    } catch (requestError) { setError(errorText(requestError)); notifyError(errorText(requestError)) } finally { setBusy(false) }
   }
 
   return (

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import api from '../api/client'
+import { notifyError, notifySuccess } from '../utils/notifications'
 
 function errorText(error) {
   const data = error.response?.data
@@ -92,8 +93,9 @@ export function BookServicePage() {
         service: Number(serviceId),
         preferred_worker_id: preferredWorkerId ? Number(preferredWorkerId) : null,
       })
+      notifySuccess('Your booking request was submitted successfully.')
       setSuccess(true)
-    } catch (requestError) { setError(errorText(requestError)) } finally { setBusy(false) }
+    } catch (requestError) { setError(errorText(requestError)); notifyError(errorText(requestError)) } finally { setBusy(false) }
   }
 
   if (loading) return <div className="page-state">Preparing your booking…</div>
@@ -143,8 +145,6 @@ export function MyBookingsPage() {
   const [bookings, setBookings] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [actionError, setActionError] = useState('')
-  const [actionNotice, setActionNotice] = useState('')
   const [cancellingId, setCancellingId] = useState(null)
 
   useEffect(() => {
@@ -155,19 +155,19 @@ export function MyBookingsPage() {
 
   const cancelBooking = async (booking) => {
     if (!window.confirm('Cancel this booking request?')) return
-    setActionError(''); setActionNotice(''); setCancellingId(booking.id)
+    setCancellingId(booking.id)
     try {
       const { data } = await api.post(`/my-bookings/${booking.id}/cancel/`)
       setBookings((current) => current.map((item) => item.id === booking.id ? data : item))
-      setActionNotice('Your booking was cancelled.')
-    } catch (requestError) { setActionError(errorText(requestError)) } finally { setCancellingId(null) }
+      notifySuccess('Your booking was cancelled.')
+    } catch (requestError) { notifyError(errorText(requestError)) } finally { setCancellingId(null) }
   }
 
   return (
     <section className="content-section page-section">
       <div className="eyebrow">HERE WHEN YOU NEED US</div><div className="section-heading page-title-row"><div><h1 className="page-title">My bookings.</h1><p className="section-intro">A little peace of mind, in one place.</p></div><Link className="button button-primary" to="/services">Book a service <span aria-hidden="true">↗</span></Link></div>
       {loading ? <div className="page-state">Gathering your bookings…</div> : error ? <div className="notice notice-error">{error}</div> : bookings.length ? (
-        <>{actionError && <div className="notice notice-error" role="alert">{actionError}</div>}{actionNotice && <div className="notice notice-success" role="status">{actionNotice}</div>}<div className="booking-list">{bookings.map((booking) => <article className="booking-card" key={booking.id}><div className="booking-card-icon">✳</div><div className="booking-card-main"><div className="booking-card-top"><h2>{booking.service_name}</h2><span className={`status-pill status-${booking.status}`}>{statusLabels[booking.status] || booking.status}</span></div><p>{new Date(`${booking.booking_date}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })} <span>·</span> {booking.booking_time.slice(0, 5)}</p>{booking.worker_name && <p className="booking-worker-name">Your professional: {booking.worker_name}</p>}{!booking.worker_name && booking.preferred_worker_name && <p className="booking-preferred-worker">Preferred professional: {booking.preferred_worker_name} · awaiting confirmation</p>}{!booking.worker_name && !booking.preferred_worker_name && booking.assignment_status === 'awaiting_response' && <p className="booking-preferred-worker">A professional is assigned and has not responded yet.</p>}<p className="booking-address">{booking.address}</p>{['pending', 'confirmed'].includes(booking.status) && <div className="booking-card-actions"><button className="button button-outline danger-button button-small" type="button" disabled={cancellingId === booking.id} onClick={() => cancelBooking(booking)}>{cancellingId === booking.id ? 'Cancelling…' : 'Cancel booking'}</button></div>}</div><div className="booking-card-price">₹{Number(booking.price_at_booking).toLocaleString('en-IN')}</div></article>)}</div></>
+        <div className="booking-list">{bookings.map((booking) => <article className="booking-card" key={booking.id}><div className="booking-card-icon">✳</div><div className="booking-card-main"><div className="booking-card-top"><h2>{booking.service_name}</h2><span className={`status-pill status-${booking.status}`}>{statusLabels[booking.status] || booking.status}</span></div><p>{new Date(`${booking.booking_date}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })} <span>·</span> {booking.booking_time.slice(0, 5)}</p>{booking.worker_name && <p className="booking-worker-name">Your professional: {booking.worker_name}</p>}{!booking.worker_name && booking.preferred_worker_name && <p className="booking-preferred-worker">Preferred professional: {booking.preferred_worker_name} · awaiting confirmation</p>}{!booking.worker_name && !booking.preferred_worker_name && booking.assignment_status === 'awaiting_response' && <p className="booking-preferred-worker">A professional is assigned and has not responded yet.</p>}<p className="booking-address">{booking.address}</p>{['pending', 'confirmed'].includes(booking.status) && <div className="booking-card-actions"><button className="button button-outline danger-button button-small" type="button" disabled={cancellingId === booking.id} onClick={() => cancelBooking(booking)}>{cancellingId === booking.id ? 'Cancelling…' : 'Cancel booking'}</button></div>}</div><div className="booking-card-price">₹{Number(booking.price_at_booking).toLocaleString('en-IN')}</div></article>)}</div>
       ) : <div className="empty-state"><span className="empty-icon">⌂</span><h3>Your next good day starts here.</h3><p>You haven’t booked a service yet. Pick the little fix you need, and we’ll take it from there.</p><Link className="button button-dark" to="/services">Explore services <span aria-hidden="true">↗</span></Link></div>}
     </section>
   )

@@ -1,10 +1,12 @@
 import { Link, Outlet } from 'react-router-dom'
 import Navbar from './Navbar'
+import { Slide, ToastContainer } from 'react-toastify'
 
 const CURRENT_YEAR = new Date().getFullYear()
 
 export default function SiteLayout() {
   return <>
+    <ToastContainer position="bottom-right" theme="dark" transition={Slide} autoClose={4000} limit={4} newestOnTop closeOnClick pauseOnFocusLoss pauseOnHover draggable role="status" />
     <Navbar />
     <main><Outlet /></main>
     <footer className="site-footer">

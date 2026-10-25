@@ -10,8 +10,11 @@ import HomePage from './pages/HomePage'
 import ServicesPage from './pages/ServicesPage'
 import { AboutPage, ContactPage, HowItWorksPage } from './pages/InfoPages'
 import { AuthProvider } from './context/AuthContext'
+import 'react-toastify/dist/ReactToastify.css'
 import './App.css'
 import './premium.css'
+import './cinematic.css'
+import './theme.css'
 
 function NotFoundPage() {
   return <section className="empty-state not-found"><span className="empty-icon">⌂</span><div className="eyebrow">A LITTLE DETOUR</div><h1>We can’t find that page.</h1><p>Let’s get you back to the good stuff.</p><Link className="button button-dark" to="/">Back home <span aria-hidden="true">↗</span></Link></section>
@@ -23,33 +26,33 @@ export default function App() {
       <AuthProvider>
         <Routes>
           <Route element={<SiteLayout />}>
-            <Route index element={<HomePage />} />
-            <Route path="services" element={<ServicesPage />} />
-            <Route path="how-it-works" element={<HowItWorksPage />} />
-            <Route path="about" element={<AboutPage />} />
-            <Route path="contact" element={<ContactPage />} />
-            <Route path="login" element={<LoginPage />} />
-            <Route path="register" element={<RegisterPage />} />
-            <Route element={<ProtectedRoute allowedRoles={['customer']} />}>
-              <Route path="services/:serviceId/book" element={<BookServicePage />} />
-              <Route path="my-bookings" element={<MyBookingsPage />} />
-              <Route path="dashboard" element={<CustomerDashboard />} />
-            </Route>
-            <Route element={<ProtectedRoute />}>
-              <Route path="profile" element={<ProfilePage />} />
-            </Route>
-            <Route element={<ProtectedRoute allowedRoles={['worker']} />}>
-              <Route path="worker/dashboard" element={<WorkerDashboard />} />
-              <Route path="worker/profile" element={<WorkerProfilePage />} />
-            </Route>
-            <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
-              <Route path="admin" element={<AdminDashboard />} />
-              <Route path="admin/workers" element={<WorkerManagement />} />
-            </Route>
-            <Route element={<ProtectedRoute superuserOnly />}>
-              <Route path="super-dashboard" element={<SuperDashboard />} />
-            </Route>
-            <Route path="*" element={<NotFoundPage />} />
+              <Route index element={<HomePage />} />
+              <Route path="services" element={<ServicesPage />} />
+              <Route path="how-it-works" element={<HowItWorksPage />} />
+              <Route path="about" element={<AboutPage />} />
+              <Route path="contact" element={<ContactPage />} />
+              <Route path="login" element={<LoginPage />} />
+              <Route path="register" element={<RegisterPage />} />
+              <Route element={<ProtectedRoute allowedRoles={['customer']} />}>
+                <Route path="services/:serviceId/book" element={<BookServicePage />} />
+                <Route path="my-bookings" element={<MyBookingsPage />} />
+                <Route path="dashboard" element={<CustomerDashboard />} />
+              </Route>
+              <Route element={<ProtectedRoute />}>
+                <Route path="profile" element={<ProfilePage />} />
+              </Route>
+              <Route element={<ProtectedRoute allowedRoles={['worker']} />}>
+                <Route path="worker/dashboard" element={<WorkerDashboard />} />
+                <Route path="worker/profile" element={<WorkerProfilePage />} />
+              </Route>
+              <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
+                <Route path="admin" element={<AdminDashboard />} />
+                <Route path="admin/workers" element={<WorkerManagement />} />
+              </Route>
+              <Route element={<ProtectedRoute superuserOnly />}>
+                <Route path="super-dashboard" element={<SuperDashboard />} />
+              </Route>
+              <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Routes>
       </AuthProvider>

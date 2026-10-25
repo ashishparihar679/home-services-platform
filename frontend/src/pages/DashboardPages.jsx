@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import api from '../api/client'
 import { useAuth } from '../context/useAuth'
+import { notifyError, notifyInfo, notifySuccess, notifyWarning } from '../utils/notifications'
 
 const bookingStatuses = [
   ['pending', 'Pending'], ['confirmed', 'Confirmed'], ['in_progress', 'In progress'],
@@ -73,16 +74,19 @@ export function CustomerDashboard() {
     const experienceYears = Number(application.experience_years)
     if (!application.skills.length) {
       setApplyError('Please select at least one service skill.')
+      notifyWarning('Please select at least one service skill.')
       setApplyBusy(false)
       return
     }
     if (!/^\+?[0-9\s().-]+$/.test(phone) || phoneDigits.length < 7 || phoneDigits.length > 15) {
       setApplyError('Enter a valid phone number with 7 to 15 digits.')
+      notifyWarning('Enter a valid phone number with 7 to 15 digits.')
       setApplyBusy(false)
       return
     }
     if (!Number.isInteger(experienceYears) || experienceYears < 0 || experienceYears > 100) {
       setApplyError('Experience must be a whole number between 0 and 100.')
+      notifyWarning('Experience must be a whole number between 0 and 100.')
       setApplyBusy(false)
       return
     }
@@ -90,21 +94,23 @@ export function CustomerDashboard() {
       await api.post('/worker/apply/', { ...application, phone_number: phone, experience_years: experienceYears })
     } catch (requestError) {
       setApplyError(errorText(requestError))
+      notifyError(errorText(requestError))
       setApplyBusy(false)
       return
     }
 
     const successMessage = 'Aapka worker application submit ho gaya hai. Admin approval ke baad aap kaam shuru kar sakte hain.'
+    notifySuccess(successMessage)
     setApplySuccess(successMessage)
     setApplyOpen(false)
     setApplyBusy(false)
-    window.alert(successMessage)
 
     try {
       await loadProfile()
       navigate('/worker/dashboard', { replace: true, state: { applicationSubmitted: true } })
     } catch {
       setApplyError('Application submit ho gaya hai, lekin profile refresh nahi ho paya. Page reload karke status dekhein.')
+      notifyInfo('Application submit ho gaya hai, lekin profile refresh nahi ho paya. Page reload karke status dekhein.')
     }
   }
 
@@ -176,17 +182,17 @@ export function WorkerDashboard() {
     try {
       if (action === 'response') await api.patch(`/worker/jobs/${job.id}/response/`, { action: value })
       else await api.patch(`/worker/jobs/${job.id}/progress/`, { status: value })
-      setNotice('Job updated successfully.')
+      setNotice(''); notifySuccess('Job updated successfully.')
       await loadJobs()
-    } catch (requestError) { setError(errorText(requestError)) } finally { setBusyJob(null) }
+    } catch (requestError) { setError(errorText(requestError)); notifyError(errorText(requestError)) } finally { setBusyJob(null) }
   }
 
   const toggleAvailability = async () => {
     try {
       await api.patch('/worker/profile/', { is_available: !worker.is_available })
       await loadProfile()
-      setNotice(`Availability ${worker.is_available ? 'turned off' : 'turned on'}.`)
-    } catch (requestError) { setError(errorText(requestError)) }
+      setNotice(''); notifySuccess(`Availability ${worker.is_available ? 'turned off' : 'turned on'}.`)
+    } catch (requestError) { setError(errorText(requestError)); notifyError(errorText(requestError)) }
   }
 
   const refreshJobs = () => { setLoading(true); loadJobs() }
@@ -256,8 +262,8 @@ export function WorkerProfilePage() {
     try {
       await api.patch('/worker/profile/', { ...form, experience_years: Number(form.experience_years) })
       await loadProfile()
-      setNotice('Worker profile saved.')
-    } catch (requestError) { setError(errorText(requestError)) } finally { setBusy(false) }
+      setNotice(''); notifySuccess('Worker profile saved.')
+    } catch (requestError) { setError(errorText(requestError)); notifyError(errorText(requestError)) } finally { setBusy(false) }
   }
 
   if (loading) return <div className="page-state">Loading worker profile…</div>

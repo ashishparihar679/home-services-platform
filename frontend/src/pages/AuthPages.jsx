@@ -2,6 +2,7 @@ import { useId, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/useAuth'
 import { dashboardPath } from '../utils/auth'
+import { notifyError, notifySuccess, notifyWarning } from '../utils/notifications'
 
 const workerSkills = ['electrician', 'plumber', 'painter', 'cleaner', 'carpenter', 'other']
 
@@ -44,8 +45,9 @@ export function LoginPage() {
     event.preventDefault(); setError(''); setBusy(true)
     try {
       const profile = await login({ ...form, account_type: accountType })
+      notifySuccess('Welcome back.')
       navigate(location.state?.from?.pathname || dashboardPath(profile), { replace: true })
-    } catch (requestError) { setError(getErrorMessage(requestError)) } finally { setBusy(false) }
+    } catch (requestError) { notifyError(getErrorMessage(requestError)) } finally { setBusy(false) }
   }
 
   return <AuthFrame eyebrow="WELCOME BACK" title="Come on in." subtitle="Choose your account type, then log in securely." footer={<>New to Bloomcare? <Link to="/register">Create an account <span aria-hidden="true">↗</span></Link></>}>
@@ -86,8 +88,8 @@ export function RegisterPage() {
 
   const submit = async (event) => {
     event.preventDefault(); setError('')
-    if (form.password !== form.confirmPassword) { setError('Passwords do not match.'); return }
-    if (accountType === 'worker' && form.skills.length === 0) { setError('Select at least one service skill.'); return }
+    if (form.password !== form.confirmPassword) { setError('Passwords do not match.'); notifyWarning('Passwords do not match.'); return }
+    if (accountType === 'worker' && form.skills.length === 0) { setError('Select at least one service skill.'); notifyWarning('Select at least one service skill.'); return }
     setBusy(true)
     try {
       const payload = {
@@ -103,8 +105,9 @@ export function RegisterPage() {
       }
       await register(payload)
       const profile = await login({ username: payload.username, password: form.password, account_type: accountType })
+      notifySuccess('Your account was created successfully.')
       navigate(dashboardPath(profile), { replace: true })
-    } catch (requestError) { setError(getErrorMessage(requestError)) } finally { setBusy(false) }
+    } catch (requestError) { notifyError(getErrorMessage(requestError)) } finally { setBusy(false) }
   }
 
   return <AuthFrame eyebrow="A WARM WELCOME" title="Make yourself at home." subtitle="Choose a customer account or apply to join as a home service worker." footer={<>Already have an account? <Link to="/login">Log in <span aria-hidden="true">↗</span></Link></>}>
