@@ -1,155 +1,170 @@
 # Bloomcare Home Services Platform
 
-Bloomcare is a home-services booking platform. Customers browse local services, request appointments, and track booking status. Workers apply to join, manage their availability, and respond to assigned jobs. Staff manage the service catalog, worker applications, and bookings.
+Bloomcare is a home-services booking platform for customers to discover local services, request a visit, and track booking progress. Staff users manage services and customer bookings through an admin dashboard.
 
 ## Technology
 
-- Frontend: React 19, Vite 8, React Router, Axios, React Toastify
-- Backend: Django 6, Django REST Framework, Simple JWT
-- Database: MySQL
+- Frontend: React 19.3.1, Vite 8.3.5, React Router, Axios 1.20.0
+- Backend: Django 6.0.9, Django REST Framework 3.18.3, and Simple JWT 5.5.1
+- Database: MySQL 8.0.41
 - Authentication: JWT access and refresh tokens
-- UI: permanent dark theme with responsive pages and an interactive 3D service carousel
 
-See [docs/architecture.md](docs/architecture.md) for component/data flow and [docs/workflow.md](docs/workflow.md) for role workflows and booking status transitions.
-
-## Repository layout
+## Project structure
 
 ```text
-frontend/
-  src/api/                 Axios API client
-  src/components/          Shared navigation, layout, carousel and cards
-  src/context/             Authentication state
-  src/pages/                Home, services, booking, account and role dashboards
-  src/utils/                Authentication and notification helpers
-backend/
-  config/                   Django settings, authentication and root URLs
-  accounts/                 Registration, worker applications and profiles
-  services/                 Service catalog API and models
-  bookings/                 Customer bookings, worker jobs and staff workflows
-docs/                       Architecture, workflow and production release notes
+frontend/                 React/Vite application
+backend/config/           Django settings and root API routes
+backend/accounts/         Registration, JWT profile API, auth tests
+backend/services/         Service catalog API, model and tests
+backend/bookings/         Booking API, status workflow and tests
+docs/architecture.md      Components and data flow
+docs/workflow.md          Customer/admin workflow and API reference
 ```
 
-## Local development
+## Local setup
 
-### Prerequisites
+### Requirements
 
-- Python compatible with Django 6
-- Node.js compatible with Vite 8 and npm
-- MySQL 8 or later
+- Python 3.13 and Node.js 24 with npm
+- MySQL 8.0 or later, running locally
+- The existing schema `home_services_db` and account `home_services_app` with required schema privileges
 
-### Configure the backend
+### MySQL database setup
 
-In PowerShell from the repository root:
+If the local database and application account do not exist yet, create them in MySQL Workbench or the MySQL client. Replace the password placeholder locally with a strong, unique password; do not commit it or paste it into chat.
+
+```sql
+CREATE DATABASE home_services_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'home_services_app'@'127.0.0.1' IDENTIFIED BY 'replace-with-a-strong-unique-password';
+GRANT ALL PRIVILEGES ON home_services_db.* TO 'home_services_app'@'127.0.0.1';
+```
+
+Create `backend/.env` from `backend/.env.example`, then set the local database password and a private Django secret key in that ignored file. Keep `DB_HOST=127.0.0.1` and `DB_PORT=3306` for local MySQL.
+
+### Backend
+
+From the repository root, open PowerShell and run:
 
 ```powershell
 cd .\backend
+.\.venv\Scripts\Activate.ps1
+```
+
+If the local virtual environment is not present, create one and install requirements:
+
+```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
+```
+
+Create `backend/.env` from `.env.example`, then enter the real local MySQL password only in `DB_PASSWORD` and set a private Django `SECRET_KEY`. Keep this file local; Git ignores it. Never paste its contents into chat or commit it.
+
+```powershell
 Copy-Item .env.example .env
 ```
 
-Edit `backend/.env` locally. Set a private `SECRET_KEY` and the MySQL `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, and `DB_PORT`. The example defaults are for local MySQL; create the database and restricted application account if needed. Never commit `.env` or share its contents.
-
-Run migrations and start the API:
+Apply migrations and run the checks:
 
 ```powershell
 python manage.py check
 python manage.py migrate
+python manage.py showmigrations
+```
+
+Create the first staff account when prompted. Type its password directly into the terminal; Django does not echo it:
+
+```powershell
 python manage.py createsuperuser
+```
+
+Run the API:
+
+```powershell
 python manage.py runserver 127.0.0.1:8000
 ```
 
-Create a superuser once for local staff testing; skip that command if you already have a staff account. The built-in Django admin is available at the backend host's `/admin/`.
+### Frontend
 
-### Configure the frontend
-
-Open a second PowerShell window from the repository root:
+In a second PowerShell window:
 
 ```powershell
 cd .\frontend
-npm install
 Copy-Item .env.example .env
+npm install
 npm run dev
 ```
 
-The Vite development URL is printed in the terminal (usually `http://localhost:5173`). `VITE_API_BASE_URL` defaults to `http://127.0.0.1:8000/api`; update the local `frontend/.env` if the API runs elsewhere. Vite reads this variable during build.
-
-### Frontend scripts
-
-Run from `frontend/`:
-
-```powershell
-npm run dev       # Start the Vite development server
-npm run build     # Create the production bundle in dist/
-npm run preview   # Preview the production bundle locally
-npm run lint      # Run Oxlint
-```
-
-### Backend checks
-
-Run from `backend/`, with the virtual environment active:
-
-```powershell
-python manage.py check
-python manage.py migrate --check
-python manage.py test accounts services bookings --settings=config.test_settings
-```
-
-The project's test settings use isolated SQLite rather than the configured MySQL database. Normal development settings use the MySQL values in `backend/.env`.
+Open the Vite URL printed in the terminal (normally `http://127.0.0.1:5173`). `VITE_API_BASE_URL` can point the frontend at another API host.
 
 ## API overview
 
-All application API routes use `/api/`. Protected endpoints require `Authorization: Bearer <access-token>`. Public service catalog requests return active services; write permissions and record ownership are enforced by Django.
+All endpoints use the `/api/` prefix. JSON errors contain field-specific messages where possible.
 
 | Method | Endpoint | Access | Purpose |
 | --- | --- | --- | --- |
-| POST | `/api/register/` | Public | Register a customer |
-| POST | `/api/token/` | Public | Obtain JWT access and refresh tokens |
+| POST | `/api/register/` | Public | Create a customer account |
+| POST | `/api/token/` | Public | Exchange username/password for JWT tokens |
 | POST | `/api/token/refresh/` | Public | Refresh an access token |
-| GET | `/api/me/` | JWT | Read current account and role |
+| GET | `/api/me/` | JWT | Read the signed-in user's profile and role |
 | GET | `/api/services/` | Public | List active services |
-| GET | `/api/services/{id}/` | Public | Read a service |
-| POST/PATCH | `/api/services/`, `/api/services/{id}/` | Staff | Create or manage catalog entries |
-| POST | `/api/worker/apply/` | JWT | Submit a worker application |
-| GET/PATCH | `/api/worker/profile/` | Worker | Read or update worker profile |
-| GET | `/api/services/{id}/available-workers/` | JWT | List eligible workers for a service |
-| POST | `/api/bookings/` | Customer JWT | Request a service booking |
-| GET | `/api/my-bookings/` | Customer JWT | List own bookings |
-| POST | `/api/my-bookings/{id}/cancel/` | Customer JWT | Cancel an eligible own booking |
-| GET | `/api/admin/bookings/` | Staff | Review booking requests |
-| PATCH | `/api/admin/bookings/{id}/assignment/` | Staff | Assign an eligible worker |
-| PATCH | `/api/bookings/{id}/status/` | Staff | Update a booking status |
-| GET | `/api/worker/jobs/` | Worker JWT | List assigned jobs |
-| PATCH | `/api/worker/jobs/{id}/response/` | Assigned worker | Accept or decline a job |
-| PATCH | `/api/worker/jobs/{id}/progress/` | Assigned worker | Update job progress |
-| GET | `/api/admin/workers/` | Staff | Review worker applications |
-| PATCH | `/api/admin/workers/{id}/` | Staff | Update worker approval/profile status |
-| GET | `/api/super/analytics/` | Superuser | Read platform analytics |
+| GET | `/api/services/{id}/` | Public | Read an active service |
+| POST | `/api/services/` | Staff | Add a service |
+| PATCH | `/api/services/{id}/` | Staff | Edit or activate/deactivate a service |
+| POST | `/api/bookings/` | JWT | Request a service visit |
+| GET | `/api/my-bookings/` | JWT | List only the signed-in user's bookings |
+| GET | `/api/admin/bookings/` | Staff | List all customer bookings |
+| PATCH | `/api/bookings/{id}/status/` | Staff | Move a booking to an allowed next status |
 
-Consult the Django route files for the supported methods and request payload fields: `backend/accounts/urls.py`, `backend/services/urls.py`, and `backend/bookings/urls.py`.
+The Django admin site is available at `/admin/` for staff users.
 
-## Booking and worker behavior
+## Tests and checks
 
-- Customer bookings are linked to the authenticated customer; the API does not trust a submitted customer ID or client-side price.
-- The booking records the service price at booking time.
-- Worker applications are reviewed by staff. Worker eligibility depends on approval, availability, and matching service skills.
-- A staff member can assign an eligible worker. The assigned worker responds to the job and updates supported progress states.
-- The API validates status transitions and permissions. See [docs/workflow.md](docs/workflow.md) for the documented workflow.
+The normal Django settings connect the application to MySQL. The automated API suite uses an isolated in-memory SQLite database so it does not require `CREATE DATABASE` permission and cannot alter local MySQL records:
 
-## Database migrations
+```powershell
+cd .\backend
+.\.venv\Scripts\python.exe manage.py test accounts services bookings --settings=config.test_settings
+.\.venv\Scripts\python.exe manage.py check
+.\.venv\Scripts\python.exe manage.py migrate --check
+```
 
-Booking migrations currently include `0001_initial`, `0002_booking_assignment_status_booking_worker`, `0003_booking_preferred_worker`, and `0004_booking_contact_phone`. Apply migrations to a local development database with `python manage.py migrate` after configuring `.env`.
+Build and lint the React application from the frontend directory:
 
-Production migration status must be checked against the production database; repository files alone do not prove a migration was applied. Follow [docs/production-release.md](docs/production-release.md) for the staged backup and release procedure. Do not run migrations from the web service startup command or reverse a migration without reviewing dependencies and data impact.
+```powershell
+cd .\frontend
+npm run build
+npm run lint
+```
 
-## Deployment notes
+## Security notes
 
-The repository documents manually configured Render services and does not currently define a Render Blueprint. For the backend start command and required environment values, consult [docs/production-release.md](docs/production-release.md). Keep secrets in the Render environment settings, not in Git. Pushing a commit does not prove that a Render build, deployment, or production migration has completed; check the relevant service's deployment history and health separately.
+- Database credentials and the Django secret key are read from `backend/.env`.
+- Public registration only creates ordinary customer users; it cannot grant staff access.
+- The frontend keeps JWTs in `sessionStorage`, which clears when the browser tab session ends. JavaScript running on the same origin can still access these tokens, so preventing cross-site scripting remains important. A production deployment should consider a backend-for-frontend or secure HttpOnly cookie design.
+- Logout removes the access and refresh tokens from the current browser session. Server-side refresh-token revocation is not configured, so a copied refresh token remains usable until it expires.
+- Frontend route guards improve navigation only. The API independently enforces authentication, ownership, and staff permissions.
+- `DEBUG` should be `False` and `ALLOWED_HOSTS`, CORS origins, HTTPS, secret management, and database credentials should be set for the production environment before deployment.
 
-## Security
+## Current implementation status
 
-- Keep `backend/.env`, production credentials, and private keys out of Git.
-- Use `DEBUG=False`, correct `ALLOWED_HOSTS`, CORS/CSRF origins, HTTPS, and a valid database CA setting in production.
-- The API enforces authentication, role permissions, customer ownership, and worker assignment rules. Frontend route guards are not a substitute for API checks.
-- JWTs are kept in browser `sessionStorage`; JavaScript on the same origin can access them. Protect the frontend from cross-site scripting and review token storage requirements for your deployment.
+- MySQL connection and initial Django migrations: verified.
+- Authentication, service catalog, and booking APIs: implemented; seven API tests pass.
+- Responsive customer pages and staff dashboard: implemented; frontend build and lint pass.
+- Local MySQL currently contains five sample services: four active for public browsing and one inactive to verify service availability rules. A staff account has been created locally. The frontend staff dashboard is `/admin` on the Vite host; Django's built-in admin is `/admin/` on the backend host.
+- Deployment and GitHub publishing have not been performed.
+- Fresh-clone installation has not been tested; project files are currently untracked in the local Git repository.
+
+## Screenshots and demo
+
+Capture real screenshots from the running application with the browser's screenshot tool. Suggested views are the home page, active service catalog, registration/login form, a successful booking and My bookings view, and the staff dashboard after signing in. Use sample data only and hide personal information before sharing screenshots. Do not fabricate screenshots or claim the dashboard was verified until a staff login succeeds.
+
+### Five-to-eight-minute demo order
+
+1. Introduce the React/Vite, Django REST Framework, and MySQL architecture (about 1 minute).
+2. Show the home page and browse/filter the live service catalog (about 1 minute).
+3. Register or sign in as a customer, create a future-dated booking, and show it in My bookings (about 2 minutes).
+4. Sign in as staff, show service management and booking requests, then advance a booking through a permitted status (about 2 minutes; requires successful staff login).
+5. Explain backend ownership/price enforcement, JWT refresh, validation, and the test suite (about 1 minute).
+
+For interview discussion, describe authentication as proving a user's identity and authorization as checking what that user may manage. Django assigns booking ownership from the authenticated request, records the service price at booking time, and validates status transitions on the server. Django ORM migrations maintain the MySQL schema; API tests cover permissions, ownership, pricing, and booking workflow rules.
