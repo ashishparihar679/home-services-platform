@@ -25,6 +25,13 @@ class Booking(models.Model):
         null=True,
         blank=True,
     )
+    preferred_worker = models.ForeignKey(
+        WorkerProfile,
+        on_delete=models.SET_NULL,
+        related_name='preferred_bookings',
+        null=True,
+        blank=True,
+    )
     assignment_status = models.CharField(
         max_length=20,
         choices=(

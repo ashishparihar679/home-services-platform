@@ -120,11 +120,23 @@ h1, h2, h3, p { margin-top: 0; }
 .booking-availability-empty { color: #8a6548; }
 .professional-list { margin-top: 13px; display: grid; gap: 8px; }
 .professional-card { min-width: 0; padding: 11px; display: flex; align-items: center; gap: 11px; border: 1px solid #e8ece7; border-radius: 7px; background: #fff; }
+.professional-choice-list { min-width: 0; margin: 12px 0 0; padding: 0; border: 0; }
+.professional-choice-list legend { margin-bottom: 8px; color: #596960; font-size: 10px; font-weight: 700; }
+.professional-auto-choice { min-height: 45px; padding: 9px 11px; display: flex !important; align-items: center; gap: 10px !important; border: 1px solid #e8ece7; border-radius: 7px; background: #fff; cursor: pointer; }
+.professional-auto-choice input, .professional-card-choice input { width: auto !important; margin: 0; padding: 0; accent-color: #356d53; }
+.professional-auto-choice span { display: grid; gap: 3px; }
+.professional-auto-choice strong { color: #264333; font-size: 10px; }
+.professional-auto-choice small { color: #7b897f; font-size: 9px; }
+.professional-card-choice { display: flex !important; align-items: center; gap: 11px !important; cursor: pointer; }
+.professional-card-selected { border-color: #6e987a; background: #f5faf4; box-shadow: 0 0 0 2px #6e987a20; }
 .professional-avatar { width: 40px; height: 40px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 50%; color: #356d53; background: #e8f1e8; font-size: 12px; font-weight: 800; }
 .professional-card-main { min-width: 0; flex: 1; }
 .professional-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.professional-card-heading h3 { min-width: 0; margin: 0; overflow: hidden; color: #264333; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.professional-card-heading h3, .professional-card-heading strong { min-width: 0; margin: 0; overflow: hidden; color: #264333; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .professional-card-main p { margin: 4px 0 0; color: #7b897f; font-size: 9px; line-height: 1.45; overflow-wrap: anywhere; }
+.professional-card-detail { margin-top: 4px; display: block; color: #7b897f; font-size: 9px; line-height: 1.45; overflow-wrap: anywhere; }
+.booking-preferred-worker { color: #8a7041 !important; font-weight: 600; }
+.booking-card-actions { margin-top: 10px; }
 .professional-availability { padding: 4px 7px; flex: 0 0 auto; border-radius: 20px; color: #426e56; background: #e9f3e9; font-size: 8px; font-weight: 700; text-transform: capitalize; }
 .professional-availability-busy { color: #8b6541; background: #f7f0e2; }
 .professional-availability-unavailable { color: #8a5c55; background: #f8ece9; }

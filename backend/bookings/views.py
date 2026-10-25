@@ -8,6 +8,7 @@ from rest_framework.views import APIView
 from accounts.models import WorkerProfile
 from accounts.permissions import IsApprovedActiveWorker, IsCustomer, IsStaffAdmin, IsSuperuserOnly
 from services.models import Service
+from .availability import BOOKING_CONFLICT_STATUSES, worker_has_booking_conflict
 from .models import Booking
 from .serializers import BookingSerializer, WorkerAvailabilityQuerySerializer, WorkerBookingSerializer
 
@@ -19,25 +20,6 @@ ALLOWED_STATUS_TRANSITIONS = {
     Booking.Status.COMPLETED: set(),
     Booking.Status.CANCELLED: set(),
 }
-BOOKING_CONFLICT_STATUSES = (
-    Booking.Status.PENDING,
-    Booking.Status.CONFIRMED,
-    Booking.Status.IN_PROGRESS,
-)
-
-
-def worker_has_booking_conflict(worker_id, booking_date, booking_time, exclude_booking_id=None):
-    conflicts = Booking.objects.filter(
-        worker_id=worker_id,
-        booking_date=booking_date,
-        booking_time=booking_time,
-        status__in=BOOKING_CONFLICT_STATUSES,
-    ).exclude(assignment_status='rejected')
-    if exclude_booking_id is not None:
-        conflicts = conflicts.exclude(pk=exclude_booking_id)
-    return conflicts.exists()
-
-
 class ServiceAvailableWorkersView(APIView):
     permission_classes = (IsCustomer,)
 
@@ -109,7 +91,29 @@ class MyBookingsView(generics.ListAPIView):
     permission_classes = (IsCustomer,)
 
     def get_queryset(self):
-        return Booking.objects.filter(customer=self.request.user).select_related('service', 'customer', 'worker__user')
+        return Booking.objects.filter(customer=self.request.user).select_related(
+            'service', 'customer', 'worker__user', 'preferred_worker__user',
+        )
+
+
+class MyBookingCancelView(APIView):
+    permission_classes = (IsCustomer,)
+
+    def post(self, request, pk):
+        with transaction.atomic():
+            try:
+                booking = Booking.objects.select_for_update().select_related(
+                    'service', 'customer', 'worker__user', 'preferred_worker__user',
+                ).get(pk=pk, customer=request.user)
+            except Booking.DoesNotExist:
+                raise NotFound('Booking not found.')
+
+            if booking.status not in (Booking.Status.PENDING, Booking.Status.CONFIRMED):
+                raise ValidationError({'status': 'Only pending or confirmed bookings can be cancelled.'})
+            booking.status = Booking.Status.CANCELLED
+            booking.save(update_fields=('status', 'updated_at'))
+
+        return Response(BookingSerializer(booking).data)
 
 
 class AdminBookingsView(generics.ListAPIView):
@@ -117,7 +121,7 @@ class AdminBookingsView(generics.ListAPIView):
     permission_classes = (IsStaffAdmin,)
 
     def get_queryset(self):
-        return Booking.objects.select_related('service', 'customer', 'worker__user')
+        return Booking.objects.select_related('service', 'customer', 'worker__user', 'preferred_worker__user')
 
 
 class BookingStatusUpdateView(APIView):
@@ -131,7 +135,9 @@ class BookingStatusUpdateView(APIView):
 
         with transaction.atomic():
             try:
-                booking = Booking.objects.select_for_update().select_related('service', 'customer', 'worker__user').get(pk=pk)
+                booking = Booking.objects.select_for_update().select_related(
+                    'service', 'customer', 'worker__user', 'preferred_worker__user',
+                ).get(pk=pk)
             except Booking.DoesNotExist:
                 return Response({'detail': 'Booking not found.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -161,7 +167,9 @@ class BookingAssignmentView(APIView):
 
         with transaction.atomic():
             try:
-                booking = Booking.objects.select_for_update().select_related('service', 'customer').get(pk=pk)
+                booking = Booking.objects.select_for_update().select_related(
+                    'service', 'customer', 'preferred_worker__user',
+                ).get(pk=pk)
             except Booking.DoesNotExist:
                 raise NotFound('Booking not found.')
 
@@ -186,6 +194,8 @@ class BookingAssignmentView(APIView):
                     raise ValidationError({'worker_id': 'Only approved, active, available workers can be assigned.'})
                 if booking.service.category not in worker.skills:
                     raise ValidationError({'worker_id': 'This worker does not list the booking service category as a skill.'})
+                if not worker.is_available:
+                    raise ValidationError({'worker_id': 'This worker is currently unavailable.'})
                 if worker_has_booking_conflict(
                     worker.pk, booking.booking_date, booking.booking_time, exclude_booking_id=booking.pk,
                 ):
@@ -204,7 +214,7 @@ class WorkerJobsView(generics.ListAPIView):
 
     def get_queryset(self):
         return Booking.objects.filter(worker=self.request.user.worker_profile).select_related(
-            'service', 'customer', 'worker__user'
+            'service', 'customer', 'worker__user', 'preferred_worker__user'
         )
 
 
@@ -219,7 +229,7 @@ class WorkerJobResponseView(APIView):
         with transaction.atomic():
             try:
                 booking = Booking.objects.select_for_update().select_related(
-                    'service', 'customer', 'worker__user'
+                    'service', 'customer', 'worker__user', 'preferred_worker__user'
                 ).get(pk=pk, worker=request.user.worker_profile)
             except Booking.DoesNotExist:
                 raise NotFound('Assigned job not found.')
@@ -253,7 +263,7 @@ class WorkerJobProgressView(APIView):
         with transaction.atomic():
             try:
                 booking = Booking.objects.select_for_update().select_related(
-                    'service', 'customer', 'worker__user'
+                    'service', 'customer', 'worker__user', 'preferred_worker__user'
                 ).get(pk=pk, worker=request.user.worker_profile)
             except Booking.DoesNotExist:
                 raise NotFound('Assigned job not found.')

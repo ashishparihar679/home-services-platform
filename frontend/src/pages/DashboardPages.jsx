@@ -213,7 +213,14 @@ export function WorkerDashboard() {
         {loading ? <div className="page-state dashboard-loading">Loading assigned jobs…</div> : jobs.length ? <div className="worker-job-list">{jobs.map((job) => <article className="worker-job-card" key={job.id}>
           <div className="worker-job-heading"><div><div className="eyebrow">JOB #{job.id}</div><h3>{job.service_name}</h3></div><StatusPill value={job.status} /></div>
           <div className="worker-job-meta"><span>{new Date(`${job.booking_date}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })} · {job.booking_time?.slice(0, 5)}</span><span>Assignment: {job.assignment_status?.replaceAll('_', ' ')}</span><strong>₹{Number(job.price_at_booking).toLocaleString('en-IN')}</strong></div>
-          {job.assignment_status === 'accepted' && <div className="worker-customer-details"><strong>Service location</strong><span>{job.address}</span>{job.notes && <span>Customer note: {job.notes}</span>}<span>Customer: {job.customer_username}</span></div>}
+          {job.assignment_status === 'accepted' ? (
+            <div className="worker-customer-details">
+              <strong>Customer: {job.customer_name}</strong>
+              <span>{job.customer_email}</span>
+              <span>Service location: {job.address}</span>
+              {job.notes && <span>Customer note: {job.notes}</span>}
+            </div>
+          ) : null}
           <div className="worker-job-actions">
             {job.assignment_status === 'awaiting_response' && <><button className="button button-primary" disabled={busyJob === job.id} onClick={() => actOnJob(job, 'response', 'accept')}>Accept job</button><button className="button button-outline" disabled={busyJob === job.id} onClick={() => actOnJob(job, 'response', 'reject')}>Reject</button></>}
             {job.assignment_status === 'accepted' && job.status === 'confirmed' && <button className="button button-dark" disabled={busyJob === job.id} onClick={() => actOnJob(job, 'progress', 'in_progress')}>Start work</button>}

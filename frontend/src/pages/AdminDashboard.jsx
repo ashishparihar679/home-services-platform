@@ -127,14 +127,17 @@ export default function AdminDashboard() {
             const eligible = workers.filter((worker) => worker.verification_status === 'approved'
               && worker.is_active && worker.is_available && worker.skills.includes(serviceCategory))
             const currentWorker = workers.find((worker) => worker.id === booking.worker_id)
+            const preferredWorker = workers.find((worker) => worker.id === booking.preferred_worker_id)
             const choices = currentWorker && !eligible.some((worker) => worker.id === currentWorker.id)
               ? [currentWorker, ...eligible] : eligible
-            const selectedWorker = assignmentDrafts[booking.id] ?? (booking.worker_id ? String(booking.worker_id) : '')
+            const initialWorkerId = booking.worker_id || (preferredWorker && eligible.some((worker) => worker.id === preferredWorker.id) ? preferredWorker.id : '')
+            const selectedWorker = assignmentDrafts[booking.id] ?? (initialWorkerId ? String(initialWorkerId) : '')
             return <article className="admin-booking-row admin-booking-row-expanded" key={booking.id}>
               <div className="admin-booking-main"><div className="admin-booking-title"><strong>{booking.service_name}</strong><span className={`status-pill status-${booking.status}`}>{statusLabels[booking.status] || booking.status}</span></div>
                 <span>{booking.customer_username} · {booking.customer_id}</span>
                 <span>{new Date(`${booking.booking_date}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} at {booking.booking_time.slice(0, 5)} · ₹{Number(booking.price_at_booking).toLocaleString('en-IN')}</span>
                 <span>{booking.address}</span>{booking.notes && <span className="admin-booking-notes">Note: {booking.notes}</span>}
+                <span>Customer preference: {booking.preferred_worker_name || 'Let Bloomcare assign'}</span>
                 <span className="booking-assignment-summary">Assigned to: {booking.worker_username || 'No worker'} · {booking.assignment_status?.replaceAll('_', ' ')}</span>
               </div>
               <div className="admin-booking-controls">

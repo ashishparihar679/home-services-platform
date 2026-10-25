@@ -51,6 +51,70 @@ class BookingApiTests(APITestCase):
         self.assertEqual(str(booking.price_at_booking), '450.00')
         self.assertEqual(booking.status, Booking.Status.PENDING)
 
+    def test_customer_can_request_an_eligible_preferred_worker_without_assigning_them(self):
+        self.worker_user.first_name = 'Asha'
+        self.worker_user.last_name = 'Kumar'
+        self.worker_user.save(update_fields=('first_name', 'last_name'))
+        self.client.force_authenticate(self.customer)
+
+        response = self.client.post('/api/bookings/', {
+            **self.payload, 'preferred_worker_id': self.worker.pk,
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        booking = Booking.objects.get(pk=response.data['id'])
+        self.assertEqual(booking.preferred_worker, self.worker)
+        self.assertIsNone(booking.worker)
+        self.assertEqual(booking.assignment_status, 'unassigned')
+        self.assertEqual(response.data['preferred_worker_name'], 'Asha Kumar')
+        self.assertIsNone(response.data['worker_name'])
+
+    def test_customer_cannot_prefer_unavailable_or_conflicting_worker(self):
+        self.client.force_authenticate(self.customer)
+        self.worker.is_available = False
+        self.worker.save(update_fields=('is_available',))
+        unavailable = self.client.post('/api/bookings/', {
+            **self.payload, 'preferred_worker_id': self.worker.pk,
+        }, format='json')
+        self.assertEqual(unavailable.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('preferred_worker_id', unavailable.data)
+
+        self.worker.is_available = True
+        self.worker.save(update_fields=('is_available',))
+        Booking.objects.create(
+            customer=self.other_customer, service=self.service, price_at_booking=self.service.price,
+            booking_date=self.payload['booking_date'], booking_time=self.payload['booking_time'],
+            address='Address', worker=self.worker, assignment_status='awaiting_response',
+        )
+        conflicting = self.client.post('/api/bookings/', {
+            **self.payload, 'preferred_worker_id': self.worker.pk,
+        }, format='json')
+        self.assertEqual(conflicting.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('preferred_worker_id', conflicting.data)
+
+    def test_customer_can_cancel_only_own_pending_or_confirmed_booking(self):
+        own = Booking.objects.create(
+            customer=self.customer, service=self.service, price_at_booking=self.service.price,
+            booking_date=timezone.localdate() + timedelta(days=1), booking_time='11:30:00', address='Own address',
+        )
+        other = Booking.objects.create(
+            customer=self.other_customer, service=self.service, price_at_booking=self.service.price,
+            booking_date=timezone.localdate() + timedelta(days=1), booking_time='12:00:00', address='Other address',
+        )
+        self.client.force_authenticate(self.customer)
+
+        cancelled = self.client.post(f'/api/my-bookings/{own.pk}/cancel/')
+        denied = self.client.post(f'/api/my-bookings/{other.pk}/cancel/')
+        self.assertEqual(cancelled.status_code, status.HTTP_200_OK)
+        self.assertEqual(cancelled.data['status'], Booking.Status.CANCELLED)
+        self.assertEqual(denied.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(Booking.objects.get(pk=other.pk).status, Booking.Status.PENDING)
+
+        own.status = Booking.Status.IN_PROGRESS
+        own.save(update_fields=('status',))
+        too_late = self.client.post(f'/api/my-bookings/{own.pk}/cancel/')
+        self.assertEqual(too_late.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_customer_can_check_service_workers_without_private_data(self):
         self.worker_user.first_name = 'Asha'
         self.worker_user.last_name = 'Kumar'
@@ -235,6 +299,8 @@ class BookingApiTests(APITestCase):
         self.assertEqual(accepted.status_code, status.HTTP_200_OK)
         self.assertEqual(accepted.data['status'], Booking.Status.CONFIRMED)
         self.assertEqual(accepted.data['address'], 'Private customer address')
+        self.assertEqual(accepted.data['customer_name'], self.customer.username)
+        self.assertIn('customer_email', accepted.data)
 
         started = self.client.patch(
             f'/api/worker/jobs/{booking.pk}/progress/', {'status': Booking.Status.IN_PROGRESS}, format='json'

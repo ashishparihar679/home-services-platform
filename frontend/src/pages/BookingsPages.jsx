@@ -37,6 +37,7 @@ export function BookServicePage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [availability, setAvailability] = useState({ key: '', status: 'idle', workers: [], error: '' })
+  const [preferredWorkerSelection, setPreferredWorkerSelection] = useState({ key: '', workerId: '' })
   const [form, setForm] = useState({ booking_date: BOOKING_MIN_DATE, booking_time: '', address: '', notes: '' })
   const availabilityKey = service && form.booking_date && form.booking_time
     ? `${serviceId}|${form.booking_date}|${form.booking_time}`
@@ -71,19 +72,25 @@ export function BookServicePage() {
   const currentAvailability = availability.key === availabilityKey
     ? availability
     : { key: availabilityKey, status: availabilityKey ? 'loading' : 'idle', workers: [], error: '' }
+  const preferredWorkerId = preferredWorkerSelection.key === availabilityKey ? preferredWorkerSelection.workerId : ''
+  const preferredWorker = currentAvailability.workers.find((worker) => String(worker.id) === preferredWorkerId)
 
   const update = (event) => setForm((current) => ({ ...current, [event.target.name]: event.target.value }))
   const submit = async (event) => {
     event.preventDefault(); setError(''); setBusy(true)
     try {
-      await api.post('/bookings/', { ...form, service: Number(serviceId) })
+      await api.post('/bookings/', {
+        ...form,
+        service: Number(serviceId),
+        preferred_worker_id: preferredWorkerId ? Number(preferredWorkerId) : null,
+      })
       setSuccess(true)
     } catch (requestError) { setError(errorText(requestError)) } finally { setBusy(false) }
   }
 
   if (loading) return <div className="page-state">Preparing your booking…</div>
   if (!service) return <section className="content-section page-section"><div className="notice notice-error">{error}</div><Link to="/services" className="text-link">Browse services ↗</Link></section>
-  if (success) return <section className="success-state"><span className="success-mark">✓</span><div className="eyebrow">REQUEST RECEIVED</div><h1>We’ll take it from here.</h1><p>Your {service.name.toLowerCase()} booking is pending. You can follow its progress in your bookings.</p><div className="success-actions"><Link className="button button-dark" to="/my-bookings">View my bookings <span aria-hidden="true">↗</span></Link><Link className="text-link" to="/services">Back to services</Link></div></section>
+  if (success) return <section className="success-state"><span className="success-mark">✓</span><div className="eyebrow">REQUEST RECEIVED</div><h1>We’ll take it from here.</h1><p>Your {service.name.toLowerCase()} booking is pending. {preferredWorker ? `${preferredWorker.name} is your preferred professional; Bloomcare will confirm the final assignment.` : 'Bloomcare will assign an eligible professional.'} You can follow its progress in your bookings.</p><div className="success-actions"><Link className="button button-dark" to="/my-bookings">View my bookings <span aria-hidden="true">↗</span></Link><Link className="text-link" to="/services">Back to services</Link></div></section>
 
   return (
     <section className="content-section page-section booking-page">
@@ -100,12 +107,16 @@ export function BookServicePage() {
               {currentAvailability.status === 'loading' && <p className="booking-availability-message" role="status">Checking professionals for this date and time…</p>}
               {currentAvailability.status === 'error' && <div className="notice notice-error" role="alert">{currentAvailability.error}</div>}
               {currentAvailability.status === 'ready' && !currentAvailability.workers.some((worker) => worker.availability_status === 'available') && <p className="booking-availability-message booking-availability-empty">No workers are available for this service at the selected date and time. Please try another time.</p>}
-              {currentAvailability.status === 'ready' && currentAvailability.workers.length > 0 && <div className="professional-list">{currentAvailability.workers.map((worker) => <article className="professional-card" key={worker.id}>
-                <span className="professional-avatar" aria-hidden="true">{workerInitials(worker.name)}</span>
-                <div className="professional-card-main"><div className="professional-card-heading"><h3>{worker.name}</h3><span className={`professional-availability professional-availability-${worker.availability_status}`}>{worker.availability_status}</span></div>
-                  <p>{worker.skills.map((skill) => skill[0].toUpperCase() + skill.slice(1)).join(' · ')} · {worker.experience_years} years’ experience</p><p>{worker.city}</p>
-                </div>
-              </article>)}</div>}
+              {currentAvailability.status === 'ready' && <fieldset className="professional-choice-list">
+                <legend>Select a preference (optional)</legend>
+                <label className="professional-auto-choice"><input type="radio" name="preferred_worker_id" value="" checked={!preferredWorkerId} onChange={() => setPreferredWorkerSelection({ key: availabilityKey, workerId: '' })} /><span><strong>Let us assign a professional</strong><small>Bloomcare will choose an eligible worker.</small></span></label>
+                {currentAvailability.workers.length > 0 && <div className="professional-list">{currentAvailability.workers.map((worker) => {
+                  const details = <><span className="professional-avatar" aria-hidden="true">{workerInitials(worker.name)}</span><span className="professional-card-main"><span className="professional-card-heading"><strong>{worker.name}</strong><span className={`professional-availability professional-availability-${worker.availability_status}`}>{worker.availability_status}</span></span><span className="professional-card-detail">{worker.skills.map((skill) => skill[0].toUpperCase() + skill.slice(1)).join(' · ')} · {worker.experience_years} years’ experience</span><span className="professional-card-detail">{worker.city}</span></span></>
+                  return worker.availability_status === 'available'
+                    ? <label className={`professional-card professional-card-choice ${preferredWorkerId === String(worker.id) ? 'professional-card-selected' : ''}`} key={worker.id}><input type="radio" name="preferred_worker_id" value={worker.id} checked={preferredWorkerId === String(worker.id)} onChange={() => setPreferredWorkerSelection({ key: availabilityKey, workerId: String(worker.id) })} />{details}</label>
+                    : <article className="professional-card" key={worker.id}>{details}</article>
+                })}</div>}
+              </fieldset>}
             </section>
             <label>Service address<textarea name="address" rows="3" placeholder="House / flat, street, area, city, PIN code" value={form.address} onChange={update} required /></label>
             <label>Anything we should know? <span className="optional-label">Optional</span><textarea name="notes" rows="3" placeholder="Share a detail that will help us prepare" value={form.notes} onChange={update} /></label>
@@ -122,6 +133,9 @@ export function MyBookingsPage() {
   const [bookings, setBookings] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [actionError, setActionError] = useState('')
+  const [actionNotice, setActionNotice] = useState('')
+  const [cancellingId, setCancellingId] = useState(null)
 
   useEffect(() => {
     api.get('/my-bookings/').then(({ data }) => setBookings(data))
@@ -129,11 +143,21 @@ export function MyBookingsPage() {
       .finally(() => setLoading(false))
   }, [])
 
+  const cancelBooking = async (booking) => {
+    if (!window.confirm('Cancel this booking request?')) return
+    setActionError(''); setActionNotice(''); setCancellingId(booking.id)
+    try {
+      const { data } = await api.post(`/my-bookings/${booking.id}/cancel/`)
+      setBookings((current) => current.map((item) => item.id === booking.id ? data : item))
+      setActionNotice('Your booking was cancelled.')
+    } catch (requestError) { setActionError(errorText(requestError)) } finally { setCancellingId(null) }
+  }
+
   return (
     <section className="content-section page-section">
       <div className="eyebrow">HERE WHEN YOU NEED US</div><div className="section-heading page-title-row"><div><h1 className="page-title">My bookings.</h1><p className="section-intro">A little peace of mind, in one place.</p></div><Link className="button button-primary" to="/services">Book a service <span aria-hidden="true">↗</span></Link></div>
       {loading ? <div className="page-state">Gathering your bookings…</div> : error ? <div className="notice notice-error">{error}</div> : bookings.length ? (
-        <div className="booking-list">{bookings.map((booking) => <article className="booking-card" key={booking.id}><div className="booking-card-icon">✳</div><div className="booking-card-main"><div className="booking-card-top"><h2>{booking.service_name}</h2><span className={`status-pill status-${booking.status}`}>{statusLabels[booking.status] || booking.status}</span></div><p>{new Date(`${booking.booking_date}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })} <span>·</span> {booking.booking_time.slice(0, 5)}</p>{booking.assignment_status === 'accepted' && booking.worker_name && <p className="booking-worker-name">Professional: {booking.worker_name}</p>}<p className="booking-address">{booking.address}</p></div><div className="booking-card-price">₹{Number(booking.price_at_booking).toLocaleString('en-IN')}</div></article>)}</div>
+        <>{actionError && <div className="notice notice-error" role="alert">{actionError}</div>}{actionNotice && <div className="notice notice-success" role="status">{actionNotice}</div>}<div className="booking-list">{bookings.map((booking) => <article className="booking-card" key={booking.id}><div className="booking-card-icon">✳</div><div className="booking-card-main"><div className="booking-card-top"><h2>{booking.service_name}</h2><span className={`status-pill status-${booking.status}`}>{statusLabels[booking.status] || booking.status}</span></div><p>{new Date(`${booking.booking_date}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })} <span>·</span> {booking.booking_time.slice(0, 5)}</p>{booking.worker_name && <p className="booking-worker-name">Your professional: {booking.worker_name}</p>}{!booking.worker_name && booking.preferred_worker_name && <p className="booking-preferred-worker">Preferred professional: {booking.preferred_worker_name} · awaiting confirmation</p>}{!booking.worker_name && !booking.preferred_worker_name && booking.assignment_status === 'awaiting_response' && <p className="booking-preferred-worker">A professional is assigned and has not responded yet.</p>}<p className="booking-address">{booking.address}</p>{['pending', 'confirmed'].includes(booking.status) && <div className="booking-card-actions"><button className="button button-outline danger-button button-small" type="button" disabled={cancellingId === booking.id} onClick={() => cancelBooking(booking)}>{cancellingId === booking.id ? 'Cancelling…' : 'Cancel booking'}</button></div>}</div><div className="booking-card-price">₹{Number(booking.price_at_booking).toLocaleString('en-IN')}</div></article>)}</div></>
       ) : <div className="empty-state"><span className="empty-icon">⌂</span><h3>Your next good day starts here.</h3><p>You haven’t booked a service yet. Pick the little fix you need, and we’ll take it from there.</p><Link className="button button-dark" to="/services">Explore services <span aria-hidden="true">↗</span></Link></div>}
     </section>
   )
