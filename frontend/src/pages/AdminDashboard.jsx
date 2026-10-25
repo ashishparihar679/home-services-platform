@@ -137,6 +137,7 @@ export default function AdminDashboard() {
                 <span>{booking.customer_username} · {booking.customer_id}</span>
                 <span>{new Date(`${booking.booking_date}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} at {booking.booking_time.slice(0, 5)} · ₹{Number(booking.price_at_booking).toLocaleString('en-IN')}</span>
                 <span>{booking.address}</span>{booking.notes && <span className="admin-booking-notes">Note: {booking.notes}</span>}
+                {booking.contact_phone && <span>Customer phone: {booking.contact_phone}</span>}
                 <span>Customer preference: {booking.preferred_worker_name || 'Let Bloomcare assign'}</span>
                 <span className="booking-assignment-summary">Assigned to: {booking.worker_username || 'No worker'} · {booking.assignment_status?.replaceAll('_', ' ')}</span>
               </div>

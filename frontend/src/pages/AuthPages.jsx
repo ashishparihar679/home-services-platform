@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/useAuth'
 import { dashboardPath } from '../utils/auth'
@@ -20,6 +20,12 @@ function AuthFrame({ eyebrow, title, subtitle, children, footer }) {
       <div className="auth-main"><div className="auth-card"><div className="eyebrow">{eyebrow}</div><h1>{title}</h1><p className="auth-subtitle">{subtitle}</p>{children}<div className="auth-footer">{footer}</div></div></div>
     </section>
   )
+}
+
+function PasswordField({ label, hint, ...inputProps }) {
+  const [visible, setVisible] = useState(false)
+  const inputId = useId()
+  return <div className="password-field"><label htmlFor={inputId}>{label}</label><span className="password-control"><input {...inputProps} id={inputId} type={visible ? 'text' : 'password'} /><button type="button" aria-label={`${visible ? 'Hide' : 'Show'} ${label.toLowerCase()}`} aria-pressed={visible} onClick={() => setVisible((current) => !current)}>{visible ? 'Hide' : 'Show'}</button></span>{hint && <small className="field-hint">{hint}</small>}</div>
 }
 
 export function LoginPage() {
@@ -54,7 +60,7 @@ export function LoginPage() {
         ))}
       </div><small className="field-hint">Your selected type is checked against your account by the server.</small></fieldset>
       <label>Username<input name="username" value={form.username} onChange={update} autoComplete="username" required /></label>
-      <label>Password<input name="password" type="password" value={form.password} onChange={update} autoComplete="current-password" required /></label>
+      <PasswordField label="Password" name="password" value={form.password} onChange={update} autoComplete="current-password" required />
       <button className="button button-dark button-wide" disabled={busy}>{busy ? 'Logging in…' : 'Log in'} <span aria-hidden="true">↗</span></button>
     </form>
   </AuthFrame>
@@ -126,8 +132,8 @@ export function RegisterPage() {
         <label>Short bio <span className="optional-label">Optional</span><textarea name="bio" rows="2" maxLength="500" value={form.bio} onChange={update} /></label>
         <div className="notice notice-info">Worker profiles start as pending. An administrator must approve your profile before you can receive jobs.</div>
       </>}
-      <label>Password<input name="password" type="password" value={form.password} onChange={update} autoComplete="new-password" minLength="8" required /><small className="field-hint">Use a strong password with at least 8 characters.</small></label>
-      <label>Confirm password<input name="confirmPassword" type="password" value={form.confirmPassword} onChange={update} autoComplete="new-password" minLength="8" required /></label>
+      <PasswordField label="Password" name="password" value={form.password} onChange={update} autoComplete="new-password" minLength="8" required hint="Use a strong password with at least 8 characters." />
+      <PasswordField label="Confirm password" name="confirmPassword" value={form.confirmPassword} onChange={update} autoComplete="new-password" minLength="8" required />
       <button className="button button-dark button-wide" disabled={busy}>{busy ? 'Creating your account…' : accountType === 'worker' ? 'Create worker account' : 'Create customer account'} <span aria-hidden="true">↗</span></button>
     </form>
   </AuthFrame>

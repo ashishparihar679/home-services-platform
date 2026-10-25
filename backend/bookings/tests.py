@@ -35,6 +35,7 @@ class BookingApiTests(APITestCase):
             'service': self.service.id,
             'booking_date': (timezone.localdate() + timedelta(days=1)).isoformat(),
             'booking_time': '10:30:00',
+            'contact_phone': '+91 9876543210',
             'address': '12 Main Street, Bhopal',
             'notes': 'Call before arrival',
             'price_at_booking': '1.00',
@@ -50,6 +51,17 @@ class BookingApiTests(APITestCase):
         self.assertEqual(booking.customer, self.customer)
         self.assertEqual(str(booking.price_at_booking), '450.00')
         self.assertEqual(booking.status, Booking.Status.PENDING)
+        self.assertEqual(booking.contact_phone, '+91 9876543210')
+
+    def test_booking_requires_a_valid_contact_phone(self):
+        self.client.force_authenticate(self.customer)
+        missing = self.client.post('/api/bookings/', {key: value for key, value in self.payload.items() if key != 'contact_phone'}, format='json')
+        invalid = self.client.post('/api/bookings/', {**self.payload, 'contact_phone': '12abc'}, format='json')
+
+        self.assertEqual(missing.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('contact_phone', missing.data)
+        self.assertEqual(invalid.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('contact_phone', invalid.data)
 
     def test_customer_can_request_an_eligible_preferred_worker_without_assigning_them(self):
         self.worker_user.first_name = 'Asha'
@@ -236,7 +248,8 @@ class BookingApiTests(APITestCase):
         booking = Booking.objects.create(
             customer=self.customer, service=self.service, price_at_booking=self.service.price,
             booking_date=timezone.localdate() + timedelta(days=1), booking_time='11:30:00',
-            address='Customer address', worker=self.worker, assignment_status='awaiting_response',
+            address='Customer address', contact_phone='+91 9876543210', worker=self.worker,
+            assignment_status='awaiting_response',
         )
         self.client.force_authenticate(self.customer)
 
@@ -270,7 +283,7 @@ class BookingApiTests(APITestCase):
         booking = Booking.objects.create(
             customer=self.customer, service=self.service, price_at_booking=self.service.price,
             booking_date=timezone.localdate() + timedelta(days=1), booking_time='12:00:00',
-            address='Private customer address', notes='Private customer note',
+            contact_phone='+91 9876543210', address='Private customer address', notes='Private customer note',
         )
         self.client.force_authenticate(self.customer)
         denied = self.client.patch(
@@ -292,6 +305,7 @@ class BookingApiTests(APITestCase):
         self.assertEqual(len(jobs.data), 1)
         self.assertNotIn('address', jobs.data[0])
         self.assertNotIn('customer_username', jobs.data[0])
+        self.assertNotIn('contact_phone', jobs.data[0])
 
         accepted = self.client.patch(
             f'/api/worker/jobs/{booking.pk}/response/', {'action': 'accept'}, format='json'
@@ -301,6 +315,7 @@ class BookingApiTests(APITestCase):
         self.assertEqual(accepted.data['address'], 'Private customer address')
         self.assertEqual(accepted.data['customer_name'], self.customer.username)
         self.assertIn('customer_email', accepted.data)
+        self.assertEqual(accepted.data['contact_phone'], '+91 9876543210')
 
         started = self.client.patch(
             f'/api/worker/jobs/{booking.pk}/progress/', {'status': Booking.Status.IN_PROGRESS}, format='json'

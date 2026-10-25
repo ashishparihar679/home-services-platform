@@ -1,3 +1,5 @@
+import re
+
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -22,6 +24,7 @@ class BookingSerializer(serializers.ModelSerializer):
         required=False, allow_null=True,
     )
     preferred_worker_name = serializers.SerializerMethodField()
+    contact_phone = serializers.CharField(max_length=30, required=True)
 
     class Meta:
         model = Booking
@@ -29,7 +32,7 @@ class BookingSerializer(serializers.ModelSerializer):
             'id', 'service', 'service_name', 'customer_id', 'customer_username', 'customer_name',
             'customer_email', 'worker_id', 'worker_username', 'worker_name', 'preferred_worker_id',
             'preferred_worker_name', 'assignment_status',
-            'price_at_booking', 'booking_date',
+            'price_at_booking', 'booking_date', 'contact_phone',
             'booking_time', 'address', 'notes', 'status', 'created_at', 'updated_at',
         )
         read_only_fields = (
@@ -84,6 +87,13 @@ class BookingSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('A service address is required.')
         return address
 
+    def validate_contact_phone(self, value):
+        phone = value.strip()
+        digits = re.sub(r'\D', '', phone)
+        if not re.fullmatch(r'\+?[0-9\s().-]+', phone) or not 7 <= len(digits) <= 15:
+            raise serializers.ValidationError('Enter a valid phone number with 7 to 15 digits.')
+        return phone
+
 
 class WorkerBookingSerializer(BookingSerializer):
     """Hide customer contact/location details until the worker accepts the job."""
@@ -93,7 +103,7 @@ class WorkerBookingSerializer(BookingSerializer):
         if instance.assignment_status != 'accepted':
             for field in (
                 'customer_id', 'customer_username', 'customer_name', 'customer_email',
-                'preferred_worker_id', 'preferred_worker_name', 'address', 'notes',
+                'preferred_worker_id', 'preferred_worker_name', 'contact_phone', 'address', 'notes',
             ):
                 data.pop(field, None)
         return data

@@ -50,6 +50,7 @@ class Booking(models.Model):
     )
     booking_date = models.DateField()
     booking_time = models.TimeField()
+    contact_phone = models.CharField(max_length=30, blank=True, default='')
     address = models.TextField()
     notes = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)

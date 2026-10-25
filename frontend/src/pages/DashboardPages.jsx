@@ -217,6 +217,7 @@ export function WorkerDashboard() {
             <div className="worker-customer-details">
               <strong>Customer: {job.customer_name}</strong>
               <span>{job.customer_email}</span>
+              {job.contact_phone && <a href={`tel:${job.contact_phone}`}>Call customer: {job.contact_phone}</a>}
               <span>Service location: {job.address}</span>
               {job.notes && <span>Customer note: {job.notes}</span>}
             </div>

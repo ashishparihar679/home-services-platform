@@ -38,7 +38,7 @@ export function BookServicePage() {
   const [success, setSuccess] = useState(false)
   const [availability, setAvailability] = useState({ key: '', status: 'idle', workers: [], error: '' })
   const [preferredWorkerSelection, setPreferredWorkerSelection] = useState({ key: '', workerId: '' })
-  const [form, setForm] = useState({ booking_date: BOOKING_MIN_DATE, booking_time: '', address: '', notes: '' })
+  const [form, setForm] = useState({ booking_date: BOOKING_MIN_DATE, booking_time: '', address: '', contact_phone: '', problem_description: '', additional_instructions: '' })
   const availabilityKey = service && form.booking_date && form.booking_time
     ? `${serviceId}|${form.booking_date}|${form.booking_time}`
     : ''
@@ -79,8 +79,16 @@ export function BookServicePage() {
   const submit = async (event) => {
     event.preventDefault(); setError(''); setBusy(true)
     try {
+      const notes = [
+        form.problem_description.trim() ? `Problem: ${form.problem_description.trim()}` : '',
+        form.additional_instructions.trim() ? `Additional instructions: ${form.additional_instructions.trim()}` : '',
+      ].filter(Boolean).join('\n\n')
       await api.post('/bookings/', {
-        ...form,
+        booking_date: form.booking_date,
+        booking_time: form.booking_time,
+        address: form.address,
+        contact_phone: form.contact_phone.trim(),
+        notes,
         service: Number(serviceId),
         preferred_worker_id: preferredWorkerId ? Number(preferredWorkerId) : null,
       })
@@ -118,8 +126,10 @@ export function BookServicePage() {
                 })}</div>}
               </fieldset>}
             </section>
-            <label>Service address<textarea name="address" rows="3" placeholder="House / flat, street, area, city, PIN code" value={form.address} onChange={update} required /></label>
-            <label>Anything we should know? <span className="optional-label">Optional</span><textarea name="notes" rows="3" placeholder="Share a detail that will help us prepare" value={form.notes} onChange={update} /></label>
+            <label>Contact phone<input name="contact_phone" type="tel" autoComplete="tel" inputMode="tel" placeholder="Your best contact number" value={form.contact_phone} onChange={update} required /></label>
+            <label>Service address<textarea name="address" rows="3" autoComplete="street-address" placeholder="House / flat, street, area, city, PIN code" value={form.address} onChange={update} required /></label>
+            <label>Describe the problem<textarea name="problem_description" rows="3" maxLength="1000" placeholder="Tell us what needs attention" value={form.problem_description} onChange={update} required /></label>
+            <label>Additional instructions <span className="optional-label">Optional</span><textarea name="additional_instructions" rows="2" maxLength="1000" placeholder="Gate access, preferred entrance, or another helpful detail" value={form.additional_instructions} onChange={update} /></label>
             <button className="button button-dark button-wide" disabled={busy}>{busy ? 'Sending your request…' : 'Request this service'} <span aria-hidden="true">↗</span></button>
           </form>
         </div>

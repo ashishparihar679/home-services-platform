@@ -10,6 +10,7 @@ import HomePage from './pages/HomePage'
 import ServicesPage from './pages/ServicesPage'
 import { AuthProvider } from './context/AuthContext'
 import './App.css'
+import './premium.css'
 
 function NotFoundPage() {
   return <section className="empty-state not-found"><span className="empty-icon">⌂</span><div className="eyebrow">A LITTLE DETOUR</div><h1>We can’t find that page.</h1><p>Let’s get you back to the good stuff.</p><Link className="button button-dark" to="/">Back home <span aria-hidden="true">↗</span></Link></section>
