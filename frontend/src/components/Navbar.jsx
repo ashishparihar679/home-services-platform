@@ -72,8 +72,13 @@ export default function Navbar() {
     <header className="site-header">
       <div className="nav-shell">
         <Link className="brand" to="/" aria-label="Bloomcare home" onClick={closeMenus}>
-          <span className="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-6v-7h-4v7H4a1 1 0 0 1-1-1V10Z" /><path d="M8 9h.01M16 9h.01" /></svg></span>
-          <span>Bloom<span className="brand-light">care</span><small>HOME SERVICES</small></span>
+          <span className="brand-mark" aria-hidden="true"><svg viewBox="0 0 40 40" focusable="false">
+            <path className="brand-house-fill" d="M7 18.5 20 8l13 10.5V32a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2Z" />
+            <path className="brand-house-line" d="M4.5 19.5 20 7l15.5 12.5M16 34v-9a4 4 0 0 1 8 0v9M11.5 22h3v3h-3z" />
+            <path className="brand-leaf" d="M21 19.5c2.1-3.5 5.8-3.7 8-3.4-.2 2.9-2 5.4-6.2 5.8" />
+            <path className="brand-leaf-vein" d="M22.7 21.3c1.2-1.6 2.8-2.9 4.8-4.1" />
+          </svg></span>
+          <span className="brand-copy"><span className="brand-name">Bloom<span className="brand-light">care</span></span><small>HOME SERVICES</small></span>
         </Link>
 
         <button className={`nav-menu-toggle ${menuOpen ? 'is-open' : ''}`} type="button" aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'} aria-expanded={menuOpen} aria-controls="primary-navigation" onClick={() => { setMenuOpen((open) => !open); setAccountOpen(false) }}>
