@@ -13,8 +13,8 @@ function errorText(error) {
   const data = error.response?.data
   if (!data) return 'Could not reach the server. Please try again.'
   if (typeof data.detail === 'string') return data.detail
-  const first = Object.values(data).flat()[0]
-  return typeof first === 'string' ? first : 'Please review the details and try again.'
+  const messages = Object.values(data).flat(Infinity).filter((value) => typeof value === 'string' && value.trim())
+  return messages[0] || 'Please review the details and try again.'
 }
 
 function StatusPill({ value }) {
@@ -42,6 +42,7 @@ export function CustomerDashboard() {
   const [applyOpen, setApplyOpen] = useState(false)
   const [applyBusy, setApplyBusy] = useState(false)
   const [applyError, setApplyError] = useState('')
+  const [applySuccess, setApplySuccess] = useState('')
   const [application, setApplication] = useState({ phone_number: '', skills: [], experience_years: '0', city: '', address: '', bio: '' })
 
   useEffect(() => {
@@ -64,12 +65,27 @@ export function CustomerDashboard() {
   }))
 
   const submitApplication = async (event) => {
-    event.preventDefault(); setApplyError(''); setApplyBusy(true)
+    event.preventDefault(); setApplyError(''); setApplySuccess(''); setApplyBusy(true)
     try {
       await api.post('/worker/apply/', { ...application, experience_years: Number(application.experience_years) })
+    } catch (requestError) {
+      setApplyError(errorText(requestError))
+      setApplyBusy(false)
+      return
+    }
+
+    const successMessage = 'Aapka worker application submit ho gaya hai. Admin approval ke baad aap kaam shuru kar sakte hain.'
+    setApplySuccess(successMessage)
+    setApplyOpen(false)
+    setApplyBusy(false)
+    window.alert(successMessage)
+
+    try {
       await loadProfile()
       navigate('/worker/dashboard', { replace: true, state: { applicationSubmitted: true } })
-    } catch (requestError) { setApplyError(errorText(requestError)) } finally { setApplyBusy(false) }
+    } catch {
+      setApplyError('Application submit ho gaya hai, lekin profile refresh nahi ho paya. Page reload karke status dekhein.')
+    }
   }
 
   return <section className="content-section page-section dashboard-page">
@@ -90,6 +106,7 @@ export function CustomerDashboard() {
       <section className="dashboard-panel profile-summary-panel"><div><div className="eyebrow">YOUR ACCOUNT</div><h2>Profile details.</h2><p>{user.first_name} {user.last_name}</p><span>{user.email}</span><span>@{user.username}</span></div><Link className="button button-outline" to="/profile">View profile</Link></section>
       <section className="dashboard-panel apply-worker-panel"><div><div className="eyebrow">WORK WITH BLOOMCARE</div><h2>Join as a home service worker.</h2><p>Apply using this account. Your profile will remain pending until an administrator reviews it.</p></div>
         {applyError && <div className="notice notice-error" role="alert">{applyError}</div>}
+        {applySuccess && <div className="notice notice-success" role="status">{applySuccess}</div>}
         {!applyOpen ? <button className="button button-dark" type="button" onClick={() => setApplyOpen(true)}>Apply to become a worker <span aria-hidden="true">↗</span></button> : <form className="worker-application-form" onSubmit={submitApplication}>
           <label>Phone number<input name="phone_number" type="tel" value={application.phone_number} onChange={changeApplication} required /></label>
           <fieldset className="skills-fieldset"><legend>Service skills</legend><div className="skill-options">{skillOptions.map((skill) => <label key={skill}><input type="checkbox" checked={application.skills.includes(skill)} onChange={() => toggleSkill(skill)} /><span>{skill}</span></label>)}</div></fieldset>
