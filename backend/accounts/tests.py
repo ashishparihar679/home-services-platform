@@ -108,16 +108,53 @@ class AuthenticationApiTests(APITestCase):
         user = User.objects.create_user(username='existing', password=STRONG_PASSWORD)
         self.client.force_authenticate(user)
         response = self.client.post('/api/worker/apply/', {
-            'phone_number': '+91 1234567890', 'skills': ['electrician'],
+            'phone_number': '+91 1234567890', 'skills': ['electrician', 'plumber'],
             'experience_years': 2, 'city': 'Indore', 'address': 'Central area',
         }, format='json')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(User.objects.filter(username='existing').count(), 1)
         self.assertEqual(WorkerProfile.objects.get(user=user).verification_status, 'pending')
+        self.assertEqual(WorkerProfile.objects.get(user=user).skills, ['electrician', 'plumber'])
         repeated = self.client.post('/api/worker/apply/', {
             'phone_number': '1234567890', 'skills': ['plumber'], 'city': 'Indore', 'address': 'A road',
         }, format='json')
         self.assertEqual(repeated.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_worker_application_requires_authentication(self):
+        response = self.client.post('/api/worker/apply/', {
+            'phone_number': '1234567890', 'skills': ['electrician'],
+            'experience_years': 2, 'city': 'Indore', 'address': 'Central area',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_worker_application_validates_required_fields_phone_and_experience(self):
+        user = User.objects.create_user(username='apply-validation', password=STRONG_PASSWORD)
+        self.client.force_authenticate(user)
+        payload = {
+            'phone_number': '1234567890', 'skills': ['electrician'],
+            'experience_years': 2, 'city': 'Indore', 'address': 'Central area',
+        }
+
+        missing_address = self.client.post('/api/worker/apply/', {**payload, 'address': ''}, format='json')
+        self.assertEqual(missing_address.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('address', missing_address.data)
+
+        missing_phone = self.client.post(
+            '/api/worker/apply/', {key: value for key, value in payload.items() if key != 'phone_number'}, format='json'
+        )
+        self.assertEqual(missing_phone.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('phone_number', missing_phone.data)
+
+        invalid_phone = self.client.post('/api/worker/apply/', {**payload, 'phone_number': '12abc'}, format='json')
+        self.assertEqual(invalid_phone.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('phone_number', invalid_phone.data)
+
+        negative_experience = self.client.post(
+            '/api/worker/apply/', {**payload, 'experience_years': -1}, format='json'
+        )
+        self.assertEqual(negative_experience.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('experience_years', negative_experience.data)
+        self.assertFalse(WorkerProfile.objects.filter(user=user).exists())
 
     def test_only_staff_can_review_worker(self):
         worker = User.objects.create_user(username='worker-review', password=STRONG_PASSWORD)

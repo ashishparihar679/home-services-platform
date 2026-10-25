@@ -12,7 +12,9 @@ const skillOptions = ['electrician', 'plumber', 'painter', 'cleaner', 'carpenter
 function errorText(error) {
   const data = error.response?.data
   if (!data) return 'Could not reach the server. Please try again.'
+  if (typeof data === 'string') return data
   if (typeof data.detail === 'string') return data.detail
+  if (typeof data !== 'object') return 'Please review the details and try again.'
   const messages = Object.values(data).flat(Infinity).filter((value) => typeof value === 'string' && value.trim())
   return messages[0] || 'Please review the details and try again.'
 }
@@ -66,8 +68,26 @@ export function CustomerDashboard() {
 
   const submitApplication = async (event) => {
     event.preventDefault(); setApplyError(''); setApplySuccess(''); setApplyBusy(true)
+    const phone = application.phone_number.trim()
+    const phoneDigits = phone.replace(/\D/g, '')
+    const experienceYears = Number(application.experience_years)
+    if (!application.skills.length) {
+      setApplyError('Please select at least one service skill.')
+      setApplyBusy(false)
+      return
+    }
+    if (!/^\+?[0-9\s().-]+$/.test(phone) || phoneDigits.length < 7 || phoneDigits.length > 15) {
+      setApplyError('Enter a valid phone number with 7 to 15 digits.')
+      setApplyBusy(false)
+      return
+    }
+    if (!Number.isInteger(experienceYears) || experienceYears < 0 || experienceYears > 100) {
+      setApplyError('Experience must be a whole number between 0 and 100.')
+      setApplyBusy(false)
+      return
+    }
     try {
-      await api.post('/worker/apply/', { ...application, experience_years: Number(application.experience_years) })
+      await api.post('/worker/apply/', { ...application, phone_number: phone, experience_years: experienceYears })
     } catch (requestError) {
       setApplyError(errorText(requestError))
       setApplyBusy(false)
@@ -108,9 +128,9 @@ export function CustomerDashboard() {
         {applyError && <div className="notice notice-error" role="alert">{applyError}</div>}
         {applySuccess && <div className="notice notice-success" role="status">{applySuccess}</div>}
         {!applyOpen ? <button className="button button-dark" type="button" onClick={() => setApplyOpen(true)}>Apply to become a worker <span aria-hidden="true">↗</span></button> : <form className="worker-application-form" onSubmit={submitApplication}>
-          <label>Phone number<input name="phone_number" type="tel" value={application.phone_number} onChange={changeApplication} required /></label>
+          <label>Phone number<input name="phone_number" type="tel" autoComplete="tel" value={application.phone_number} onChange={changeApplication} required /></label>
           <fieldset className="skills-fieldset"><legend>Service skills</legend><div className="skill-options">{skillOptions.map((skill) => <label key={skill}><input type="checkbox" checked={application.skills.includes(skill)} onChange={() => toggleSkill(skill)} /><span>{skill}</span></label>)}</div></fieldset>
-          <label>Experience (years)<input name="experience_years" type="number" min="0" max="100" value={application.experience_years} onChange={changeApplication} required /></label>
+          <label>Experience (years)<input name="experience_years" type="number" min="0" max="100" step="1" value={application.experience_years} onChange={changeApplication} required /></label>
           <label>City<input name="city" value={application.city} onChange={changeApplication} required /></label>
           <label>Address<textarea name="address" rows="2" value={application.address} onChange={changeApplication} required /></label>
           <label>Short bio <span className="optional-label">Optional</span><textarea name="bio" rows="2" maxLength="500" value={application.bio} onChange={changeApplication} /></label>

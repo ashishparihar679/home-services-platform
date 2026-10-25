@@ -1,4 +1,4 @@
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -33,7 +33,16 @@ class WorkerApplicationView(APIView):
     def post(self, request):
         serializer = WorkerProfileCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        profile = serializer.save(user=request.user)
+        try:
+            # Keep the one-to-one user constraint as the final guard if two
+            # application requests race past the customer permission check.
+            with transaction.atomic():
+                profile = serializer.save(user=request.user)
+        except IntegrityError:
+            return Response(
+                {"detail": "A worker application already exists for this account."},
+                status=status.HTTP_409_CONFLICT,
+            )
         return Response(WorkerProfileSerializer(profile).data, status=status.HTTP_201_CREATED)
 
 

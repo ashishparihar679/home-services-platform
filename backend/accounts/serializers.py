@@ -1,3 +1,5 @@
+import re
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.db import transaction
@@ -7,6 +9,15 @@ from .models import WorkerProfile
 
 User = get_user_model()
 SERVICE_SKILLS = ("electrician", "plumber", "painter", "cleaner", "carpenter", "other")
+PHONE_NUMBER_PATTERN = re.compile(r"^\+?[0-9\s().-]+$")
+
+
+def validate_phone_number(value):
+    value = value.strip()
+    digits = re.sub(r"\D", "", value)
+    if not PHONE_NUMBER_PATTERN.fullmatch(value) or not 7 <= len(digits) <= 15:
+        raise serializers.ValidationError("Enter a valid phone number with 7 to 15 digits.")
+    return value
 
 
 def user_role(user):
@@ -58,13 +69,11 @@ class WorkerProfileSerializer(serializers.ModelSerializer):
         return value
 
     def validate_phone_number(self, value):
-        value = value.strip()
-        if not value:
-            raise serializers.ValidationError("Phone number is required.")
-        return value
+        return validate_phone_number(value)
 
 
 class WorkerProfileCreateSerializer(serializers.ModelSerializer):
+    phone_number = serializers.CharField(max_length=30, allow_blank=False, required=True)
     skills = serializers.ListField(
         child=serializers.ChoiceField(choices=SERVICE_SKILLS),
         allow_empty=False,
@@ -93,10 +102,7 @@ class WorkerProfileCreateSerializer(serializers.ModelSerializer):
         return value
 
     def validate_phone_number(self, value):
-        value = value.strip()
-        if not value:
-            raise serializers.ValidationError("Phone number is required.")
-        return value
+        return validate_phone_number(value)
 
 
 class RegisterSerializer(serializers.ModelSerializer):
